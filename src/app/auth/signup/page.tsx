@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { signIn, getProviders } from "next-auth/react"
+import type { ClientSafeProvider } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 
@@ -15,7 +16,7 @@ export default function SignUp() {
   })
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
-  const [providers, setProviders] = useState<any>(null)
+  const [providers, setProviders] = useState<Record<string, ClientSafeProvider> | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -99,7 +100,7 @@ export default function SignUp() {
         
         <div className="mt-8 space-y-6">
           {/* OAuth Providers - only show if available */}
-          {providers && Object.values(providers).some((provider: any) => provider.id !== "credentials") && (
+          {providers && Object.values(providers).some((provider: ClientSafeProvider) => provider.id !== "credentials") && (
             <>
               <div className="space-y-3">
                 {providers.google && (

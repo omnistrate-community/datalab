@@ -3,6 +3,7 @@
 import { useSession, signOut } from "next-auth/react"
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { 
   User, 
   Settings, 
@@ -141,9 +142,11 @@ export function Navbar({ className = "" }: NavbarProps) {
               >
                 <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center">
                   {session.user.image ? (
-                    <img
+                    <Image
                       src={session.user.image}
                       alt="Profile"
+                      width={32}
+                      height={32}
                       className="w-8 h-8 rounded-full"
                     />
                   ) : (

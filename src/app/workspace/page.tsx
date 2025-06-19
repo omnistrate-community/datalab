@@ -27,62 +27,64 @@ export default function Workspace() {
   ];
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg">
-        {/* Header */}
-        <div className="border-b border-gray-200 dark:border-gray-700">
-          <div className="p-6">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              DataLab Workspace
-            </h1>
-            <p className="text-gray-600 dark:text-gray-300 mt-1">
-              Upload, process, and visualize your data with AI-powered agents
-            </p>
-          </div>
-            
-            {/* Tab Navigation */}
-            <div className="flex space-x-8 px-6">
-              {tabs.map((tab) => {
-                const Icon = tab.icon;
-                return (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center space-x-2 pb-4 border-b-2 transition-colors ${
-                      activeTab === tab.id
-                        ? "border-blue-600 text-blue-600"
-                        : "border-transparent text-gray-500 hover:text-gray-700"
-                    }`}
-                  >
-                    <Icon className="w-5 h-5" />
-                    <span className="font-medium">{tab.label}</span>
-                  </button>
-                );
-              })}
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="container mx-auto px-4 py-8">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg">
+          {/* Header */}
+          <div className="border-b border-gray-200 dark:border-gray-700">
+            <div className="p-6">
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                DataLab Workspace
+              </h1>
+              <p className="text-gray-600 dark:text-gray-300 mt-1">
+                Upload, process, and visualize your data with AI-powered agents
+              </p>
             </div>
-          </div>
+              
+              {/* Tab Navigation */}
+              <div className="flex space-x-8 px-6">
+                {tabs.map((tab) => {
+                  const Icon = tab.icon;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`flex items-center space-x-2 pb-4 border-b-2 transition-colors ${
+                        activeTab === tab.id
+                          ? "border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400"
+                          : "border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300"
+                      }`}
+                    >
+                      <Icon className="w-5 h-5" />
+                      <span className="font-medium">{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
 
-          {/* Content */}
-          <div className="p-6">
-            {activeTab === "upload" && (
-              <FileUpload onDataLoad={handleDataLoad} />
-            )}
-            
-            {activeTab === "data" && (
-              <DataTable data={data} columns={columns} />
-            )}
-            
-            {activeTab === "agents" && (
-              <AgentPanel 
-                data={data} 
-                columns={columns} 
-                onDataUpdate={(newData: DataRow[]) => setData(newData)} 
-              />
-            )}
-            
-            {activeTab === "visualize" && (
-              <VisualizationPanel data={data} columns={columns} />
-            )}
+            {/* Content */}
+            <div className="p-6">
+              {activeTab === "upload" && (
+                <FileUpload onDataLoad={handleDataLoad} />
+              )}
+              
+              {activeTab === "data" && (
+                <DataTable data={data} columns={columns} />
+              )}
+              
+              {activeTab === "agents" && (
+                <AgentPanel 
+                  data={data} 
+                  columns={columns} 
+                  onDataUpdate={(newData: DataRow[]) => setData(newData)} 
+                />
+              )}
+              
+              {activeTab === "visualize" && (
+                <VisualizationPanel data={data} columns={columns} />
+              )}
+            </div>
           </div>
         </div>
       </div>
