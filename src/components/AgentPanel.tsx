@@ -108,11 +108,30 @@ export default function AgentPanel({ data, onDataUpdate }: AgentPanelProps) {
       }
 
       // Update the results with LLM analysis
+      const reasoning = result.result.analysis.reasoning;
+      let messageText = 'Processing completed successfully';
+      
+      // Handle different types of reasoning responses
+      if (typeof reasoning === 'string') {
+        messageText = reasoning;
+      } else if (typeof reasoning === 'object' && reasoning !== null) {
+        // If reasoning is an object, create a meaningful message
+        const reasoningObj = reasoning as Record<string, unknown>;
+        if (reasoningObj.dataQuality || reasoningObj.dataCharacteristics) {
+          messageText = 'Analysis completed successfully with detailed insights';
+        } else {
+          messageText = 'Analysis completed with detailed results';
+        }
+      }
+
+      // Clean the analysis object to ensure all values are serializable
+      const cleanAnalysis = { ...result.result.analysis };
+      
       setResults(prev => ({ 
         ...prev, 
         [agentId]: {
-          message: result.result.analysis.reasoning || 'Processing completed successfully',
-          ...result.result.analysis
+          message: messageText,
+          ...cleanAnalysis
         } as { message: string; [key: string]: unknown }
       }));
 
@@ -222,16 +241,97 @@ export default function AgentPanel({ data, onDataUpdate }: AgentPanelProps) {
                   
                   {results[agent.id] && (
                     <div className="mt-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
-                      <p className="text-sm text-green-800 dark:text-green-200">
+                      <p className="text-sm text-green-800 dark:text-green-200 font-medium mb-3">
                         {results[agent.id].message}
                       </p>
-                      {Object.entries(results[agent.id])
-                        .filter(([key]) => key !== "message")
-                        .map(([key, value]) => (
-                          <p key={key} className="text-xs text-green-700 dark:text-green-300 mt-1">
-                            {key}: {String(value)}
-                          </p>
-                        ))}
+                      
+                      {/* Render insights if available */}
+                      {(() => {
+                        try {
+                          const insights = results[agent.id].insights;
+                          return insights && Array.isArray(insights) ? (
+                            <div className="mb-3">
+                              <h6 className="text-xs font-semibold text-green-700 dark:text-green-300 mb-1">Key Insights:</h6>
+                              <ul className="text-xs text-green-700 dark:text-green-300 space-y-1">
+                                {insights.slice(0, 3).map((insight, idx) => (
+                                  <li key={idx} className="flex items-start">
+                                    <span className="mr-1">•</span>
+                                    <span>{String(insight)}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null;
+                        } catch (error) {
+                          console.error('Error rendering insights:', error);
+                          return null;
+                        }
+                      })()}
+
+                      {/* Render other analysis results */}
+                      {(() => {
+                        try {
+                          const result = results[agent.id];
+                          return Object.entries(result)
+                            .filter(([key]) => !["message", "error", "insights", "reasoning"].includes(key))
+                            .map(([key, value]) => {
+                              // Skip invalid or non-renderable values
+                              if (value === undefined || value === null) return null;
+                              
+                              try {
+                                return (
+                                  <div key={key} className="mb-2">
+                                    <h6 className="text-xs font-semibold text-green-700 dark:text-green-300 capitalize mb-1">
+                                      {key.replace(/([A-Z])/g, ' $1').trim()}:
+                                    </h6>
+                                    <div className="pl-2">
+                                      {typeof value === 'object' && value !== null ? (
+                                        <pre className="whitespace-pre-wrap text-xs bg-green-100 dark:bg-green-900/30 p-2 rounded border overflow-x-auto max-h-32">
+                                          {JSON.stringify(value, null, 2)}
+                                        </pre>
+                                      ) : (
+                                        <span className="text-xs text-green-700 dark:text-green-300">{String(value)}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              } catch (renderError) {
+                                console.error('Error rendering field:', key, renderError);
+                                return null;
+                              }
+                            });
+                        } catch (error) {
+                          console.error('Error rendering analysis results:', error);
+                          return null;
+                        }
+                      })()}
+
+                      {/* Special handling for reasoning object */}
+                      {(() => {
+                        try {
+                          const reasoning = results[agent.id].reasoning;
+                          return reasoning && typeof reasoning === 'object' && reasoning !== null ? (
+                            <div className="mb-2">
+                              <h6 className="text-xs font-semibold text-green-700 dark:text-green-300 mb-1">Analysis Details:</h6>
+                              <div className="pl-2 space-y-1">
+                                {Object.entries(reasoning as Record<string, unknown>).map(([key, value]) => (
+                                  <div key={key}>
+                                    <span className="text-xs font-medium text-green-700 dark:text-green-300 capitalize">
+                                      {key.replace(/([A-Z])/g, ' $1').trim()}:
+                                    </span>
+                                    <p className="text-xs text-green-600 dark:text-green-400 mt-1 pl-2">
+                                      {String(value)}
+                                    </p>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : null;
+                        } catch (error) {
+                          console.error('Error rendering reasoning:', error);
+                          return null;
+                        }
+                      })()}
                     </div>
                   )}
                 </div>

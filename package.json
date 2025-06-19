@@ -11,17 +11,26 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.54.0",
+    "@auth/prisma-adapter": "^2.9.1",
+    "@prisma/client": "^6.10.1",
     "@radix-ui/react-dialog": "^1.1.14",
     "@radix-ui/react-progress": "^1.1.7",
     "@radix-ui/react-select": "^2.2.5",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "bcryptjs": "^3.0.2",
     "file-saver": "^2.0.5",
+    "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.518.0",
     "next": "15.3.4",
+    "next-auth": "^4.24.11",
     "papaparse": "^5.5.3",
+    "prisma": "^6.10.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-dropzone": "^14.3.8",
-    "recharts": "^2.15.3"
+    "recharts": "^2.15.3",
+    "zod": "^3.25.67"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",

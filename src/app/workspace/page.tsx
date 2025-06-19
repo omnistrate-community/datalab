@@ -27,19 +27,18 @@ export default function Workspace() {
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <div className="container mx-auto px-4 py-8">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg">
-          {/* Header */}
-          <div className="border-b border-gray-200 dark:border-gray-700">
-            <div className="p-6">
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                DataLab Workspace
-              </h1>
-              <p className="text-gray-600 dark:text-gray-300 mt-1">
-                Upload, process, and visualize your data with AI-powered agents
-              </p>
-            </div>
+    <div className="container mx-auto px-4 py-8">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg">
+        {/* Header */}
+        <div className="border-b border-gray-200 dark:border-gray-700">
+          <div className="p-6">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              DataLab Workspace
+            </h1>
+            <p className="text-gray-600 dark:text-gray-300 mt-1">
+              Upload, process, and visualize your data with AI-powered agents
+            </p>
+          </div>
             
             {/* Tab Navigation */}
             <div className="flex space-x-8 px-6">
@@ -87,6 +86,5 @@ export default function Workspace() {
           </div>
         </div>
       </div>
-    </div>
   );
 }

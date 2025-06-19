@@ -1,0 +1,266 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+
+  // SaaS specific fields
+  role          UserRole  @default(USER)
+  organizationId String?
+  organization  Organization? @relation(fields: [organizationId], references: [id])
+  
+  // User profile and settings
+  profile       UserProfile?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Data processing history
+  dataUploads   DataUpload[]
+  agentRuns     AgentRun[]
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  
+  // Subscription and billing
+  plan        Plan     @default(FREE)
+  status      OrganizationStatus @default(ACTIVE)
+  
+  // Usage limits and tracking
+  monthlyAgentRuns    Int @default(0)
+  monthlyDataUploads  Int @default(0)
+  agentRunLimit       Int @default(100) // Per month
+  dataUploadLimit     Int @default(50)  // Per month
+  storageUsedMB       Int @default(0)
+  storageLimit        Int @default(1000) // MB
+  
+  // Configuration
+  settings    OrganizationSettings?
+  
+  // Relations
+  users       User[]
+  dataUploads DataUpload[]
+  agentRuns   AgentRun[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model UserProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  // Profile information
+  firstName   String?
+  lastName    String?
+  title       String?
+  company     String?
+  timezone    String   @default("UTC")
+  
+  // Authentication (for credentials provider)
+  hashedPassword String?
+  
+  // Preferences
+  theme       Theme    @default(SYSTEM)
+  language    String   @default("en")
+  
+  // API and LLM preferences
+  preferredLLMProvider LLMProvider @default(ANTHROPIC)
+  anthropicApiKey      String?
+  openaiApiKey         String?
+  
+  // Notification preferences
+  emailNotifications   Boolean @default(true)
+  agentNotifications   Boolean @default(true)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model OrganizationSettings {
+  id               String       @id @default(cuid())
+  organizationId   String       @unique
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  // Data retention and security
+  dataRetentionDays    Int     @default(90)
+  allowDataExport      Boolean @default(true)
+  requireTwoFactor     Boolean @default(false)
+  
+  // Default LLM configuration for organization
+  defaultLLMProvider   LLMProvider @default(ANTHROPIC)
+  anthropicApiKey      String?
+  openaiApiKey         String?
+  
+  // Usage and limits
+  enableUsageAlerts    Boolean @default(true)
+  usageAlertThreshold  Int     @default(80) // Percentage
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model DataUpload {
+  id             String       @id @default(cuid())
+  userId         String
+  organizationId String
+  user           User         @relation(fields: [userId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  
+  // File information
+  filename       String
+  originalName   String
+  fileSize       Int          // in bytes
+  mimeType       String
+  
+  // Data information
+  rowCount       Int?
+  columnCount    Int?
+  columns        Json?        // Array of column names and types
+  
+  // Processing status
+  status         UploadStatus @default(UPLOADED)
+  errorMessage   String?
+  
+  // Relations
+  agentRuns      AgentRun[]
+  
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model AgentRun {
+  id             String       @id @default(cuid())
+  userId         String
+  organizationId String
+  dataUploadId   String
+  user           User         @relation(fields: [userId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  dataUpload     DataUpload   @relation(fields: [dataUploadId], references: [id])
+  
+  // Agent information
+  agentType      String       // remove-duplicates, handle-missing, etc.
+  agentName      String
+  prompt         String?
+  
+  // Processing details
+  status         AgentStatus  @default(RUNNING)
+  startedAt      DateTime     @default(now())
+  completedAt    DateTime?
+  duration       Int?         // in milliseconds
+  
+  // Results
+  inputRowCount  Int?
+  outputRowCount Int?
+  analysis       Json?        // Agent analysis results
+  errorMessage   String?
+  
+  // LLM usage
+  llmProvider    LLMProvider?
+  tokensUsed     Int?
+  cost           Float?       // in USD
+  
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+// Enums
+enum UserRole {
+  ADMIN
+  USER
+  VIEWER
+}
+
+enum Plan {
+  FREE
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+enum Theme {
+  LIGHT
+  DARK
+  SYSTEM
+}
+
+enum LLMProvider {
+  ANTHROPIC
+  OPENAI
+  LOCAL
+}
+
+enum UploadStatus {
+  UPLOADED
+  PROCESSING
+  PROCESSED
+  ERROR
+}
+
+enum AgentStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+  ERROR
+  CANCELLED
+}
