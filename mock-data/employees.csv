@@ -1,0 +1,26 @@
+id,name,age,department,salary,performance_score,hire_date,email,city,country
+1,John Smith,28,Engineering,75000,8.5,2022-03-15,john.smith@company.com,New York,USA
+2,Sarah Johnson,32,Marketing,68000,9.2,2021-07-22,sarah.j@company.com,Los Angeles,USA
+3,Mike Chen,25,Engineering,72000,7.8,2023-01-10,mike.chen@company.com,San Francisco,USA
+4,Emily Davis,29,Sales,65000,8.9,2022-09-05,emily.davis@company.com,Chicago,USA
+5,David Wilson,35,Engineering,85000,9.1,2020-11-30,david.wilson@company.com,Seattle,USA
+6,Lisa Brown,27,Marketing,62000,8.3,2023-02-14,lisa.brown@company.com,Boston,USA
+7,James Lee,31,Sales,70000,7.5,2021-12-08,james.lee@company.com,Miami,USA
+8,Anna Rodriguez,26,Engineering,73000,8.7,2022-08-18,anna.r@company.com,Austin,USA
+9,Robert Taylor,33,Marketing,69000,8.1,2021-05-03,robert.t@company.com,Denver,USA
+10,Jennifer White,30,Sales,67000,9.0,2022-04-12,jennifer.w@company.com,Portland,USA
+11,Michael Brown,24,Engineering,71000,7.9,2023-03-20,michael.b@company.com,New York,USA
+12,Jessica Garcia,28,Marketing,64000,8.4,2022-10-07,jessica.g@company.com,Los Angeles,USA
+13,Christopher Miller,36,Sales,72000,8.8,2020-08-15,chris.miller@company.com,San Francisco,USA
+14,Amanda Anderson,27,Engineering,74000,9.3,2022-12-01,amanda.a@company.com,Chicago,USA
+15,Daniel Martinez,29,Marketing,66000,8.0,2021-09-25,daniel.m@company.com,Seattle,USA
+16,Michelle Thomas,25,Sales,63000,7.7,2023-01-30,michelle.t@company.com,Boston,USA
+17,Kevin Jackson,32,Engineering,78000,8.6,2021-06-18,kevin.j@company.com,Miami,USA
+18,Stephanie Moore,28,Marketing,65000,9.1,2022-07-09,stephanie.m@company.com,Austin,USA
+19,Ryan Thompson,31,Sales,69000,8.2,2021-11-14,ryan.t@company.com,Denver,USA
+20,Nicole Harris,26,Engineering,72000,8.9,2022-05-26,nicole.h@company.com,Portland,USA
+21,John Smith,28,Engineering,75000,,2022-03-15,john.smith@company.com,New York,USA
+22,Sarah Johnson,32,Marketing,,9.2,2021-07-22,,Los Angeles,USA
+23,,25,Engineering,72000,7.8,2023-01-10,mike.chen@company.com,San Francisco,USA
+24,Emily Davis,29,Sales,65000,8.9,2022-09-05,emily.davis@company.com,,USA
+25,David Wilson,35,Engineering,85000,9.1,2020-11-30,david.wilson@company.com,Seattle,

@@ -1,0 +1,26 @@
+product_id,product_name,category,price,stock_quantity,rating,review_count,launch_date,brand,is_featured
+SKU001,Wireless Bluetooth Headphones,Electronics,89.99,150,4.5,1250,2023-01-15,AudioTech,true
+SKU002,Organic Cotton T-Shirt,Clothing,25.99,300,4.2,890,2023-02-20,EcoWear,false
+SKU003,Smart Fitness Watch,Electronics,199.99,75,4.7,2100,2022-11-10,FitTrack,true
+SKU004,Ceramic Coffee Mug,Home & Kitchen,12.99,500,4.1,430,2023-03-05,HomeGoods,false
+SKU005,Laptop Backpack,Accessories,45.99,200,4.3,670,2023-01-30,TechGear,false
+SKU006,Wireless Phone Charger,Electronics,29.99,250,4.0,520,2022-12-15,PowerUp,false
+SKU007,Yoga Mat,Sports & Outdoors,35.99,180,4.6,980,2023-02-10,ZenFit,true
+SKU008,Stainless Steel Water Bottle,Home & Kitchen,22.99,400,4.4,1150,2022-10-25,HydroLife,false
+SKU009,Gaming Mouse,Electronics,79.99,120,4.8,1890,2023-01-08,GamePro,true
+SKU010,Cookbook - Italian Cuisine,Books,28.99,80,4.3,340,2023-03-12,CulinaryArts,false
+SKU011,LED Desk Lamp,Home & Kitchen,39.99,160,4.2,760,2022-11-20,BrightLight,false
+SKU012,Running Shoes,Sports & Outdoors,119.99,90,4.5,1560,2023-02-01,RunFast,true
+SKU013,Smartphone Case,Accessories,15.99,600,3.9,890,2023-01-25,ProtectPro,false
+SKU014,Essential Oils Set,Health & Beauty,34.99,140,4.7,720,2022-12-08,AromaBliss,false
+SKU015,Bluetooth Speaker,Electronics,65.99,110,4.4,1320,2023-01-18,SoundWave,true
+SKU016,Kitchen Knife Set,Home & Kitchen,89.99,70,4.6,450,2022-11-30,ChefMaster,false
+SKU017,Resistance Bands,Sports & Outdoors,19.99,320,4.1,610,2023-02-28,FlexFit,false
+SKU018,Laptop Stand,Accessories,42.99,130,4.3,380,2023-01-12,WorkEase,false
+SKU019,Face Moisturizer,Health & Beauty,29.99,220,4.5,950,2022-12-20,GlowSkin,false
+SKU020,Board Game,Toys & Games,32.99,95,4.8,280,2023-03-01,FunTime,true
+SKU021,,Electronics,89.99,150,,1250,2023-01-15,AudioTech,true
+SKU022,Organic Cotton T-Shirt,Clothing,,300,4.2,890,2023-02-20,,false
+SKU023,Smart Fitness Watch,Electronics,199.99,,4.7,2100,2022-11-10,FitTrack,
+SKU024,Ceramic Coffee Mug,Home & Kitchen,12.99,500,4.1,,2023-03-05,HomeGoods,false
+SKU025,Laptop Backpack,Accessories,45.99,200,,670,,TechGear,false
