@@ -93,18 +93,6 @@ export function Navbar({ className = "" }: NavbarProps) {
                 Workspace
               </Link>
               <Link
-                href="/workspace/agents"
-                className="text-gray-500 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium"
-              >
-                AI Agents
-              </Link>
-              <Link
-                href="/workspace/data"
-                className="text-gray-500 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium"
-              >
-                Data
-              </Link>
-              <Link
                 href="/usage"
                 className="text-gray-500 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium"
               >

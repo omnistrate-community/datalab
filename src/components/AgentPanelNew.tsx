@@ -920,10 +920,10 @@ Please consider these data quality aspects in your analysis and mention them if 
   const currentAgent = currentConversation ? agents.find(a => a.id === currentConversation.agentId) : null;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-12rem)]">
+    <div className="flex flex-col h-[calc(100vh-5rem)]">
       {/* Error Notification */}
       {lastError && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 mb-4">
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-2 mb-2 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center">
               <div className="flex-shrink-0">
@@ -935,7 +935,7 @@ Please consider these data quality aspects in your analysis and mention them if 
                 <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
                   {lastError.code ? `Error (${lastError.code})` : 'Error'}
                 </h3>
-                <p className="mt-1 text-sm text-red-700 dark:text-red-300">
+                <p className="text-sm text-red-700 dark:text-red-300">
                   {lastError.message}
                   {retryCount > 0 && ` (Retry attempt: ${retryCount})`}
                 </p>
@@ -956,14 +956,14 @@ Please consider these data quality aspects in your analysis and mention them if 
 
       {/* Performance Dashboard - Show when there's performance data */}
       {agentPerformance.size > 0 && (
-        <div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-4">
-          <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">Agent Performance</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-gray-50 dark:bg-gray-900/20 border border-gray-200 dark:border-gray-700 rounded-lg p-2 mb-2 flex-shrink-0">
+          <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">Agent Performance</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
             {Array.from(agentPerformance.entries()).slice(0, 3).map(([agentId, performance]) => {
               const agent = agents.find(a => a.id === agentId);
               return (
-                <div key={agentId} className="bg-white dark:bg-gray-800 rounded-lg p-3 border border-gray-200 dark:border-gray-600">
-                  <div className="flex items-center justify-between mb-2">
+                <div key={agentId} className="bg-white dark:bg-gray-800 rounded-lg p-2 border border-gray-200 dark:border-gray-600">
+                  <div className="flex items-center justify-between mb-1">
                     <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
                       {agent?.name || agentId}
                     </span>
@@ -994,15 +994,15 @@ Please consider these data quality aspects in your analysis and mention them if 
 
       {/* Agent Recommendations */}
       {agentRecommendations.length > 0 && (
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
-          <h3 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-3">
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-2 mb-2 flex-shrink-0">
+          <h3 className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-1">
             🤖 Recommended Agents for Your Data
           </h3>
-          <div className="space-y-2">
+          <div className="space-y-1">
             {agentRecommendations.slice(0, 3).map((recommendation: AgentRecommendation, index: number) => {
               const agent = agents.find(a => a.id === recommendation.agentId);
               return (
-                <div key={recommendation.agentId} className="flex items-center justify-between bg-white dark:bg-gray-800 rounded-lg p-3 border border-blue-200 dark:border-blue-600">
+                <div key={recommendation.agentId} className="flex items-center justify-between bg-white dark:bg-gray-800 rounded-lg p-2 border border-blue-200 dark:border-blue-600">
                   <div className="flex items-center space-x-3">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${agent?.color || 'bg-gray-500'} text-white`}>
                       {agent?.icon || '🤖'}
@@ -1039,7 +1039,7 @@ Please consider these data quality aspects in your analysis and mention them if 
       )}
 
       {/* Main Content */}
-      <div className="flex flex-1 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+      <div className="flex flex-1 min-h-0 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
         <AgentSidebar
           agents={agents}
           conversations={conversations}
