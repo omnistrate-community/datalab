@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Navbar } from "@/components/navbar"
 import { Save, Key, User, Bell, Palette } from "lucide-react"
 
 interface UserProfile {
@@ -106,27 +105,22 @@ export default function ProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <Navbar />
-        <div className="container mx-auto px-4 py-8">
-          <div className="animate-pulse">
-            <div className="h-8 bg-gray-300 dark:bg-gray-600 rounded w-1/4 mb-4"></div>
-            <div className="h-64 bg-gray-300 dark:bg-gray-600 rounded"></div>
-          </div>
+      <div className="container mx-auto px-4 py-8">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-300 dark:bg-gray-600 rounded w-1/4 mb-4"></div>
+          <div className="h-64 bg-gray-300 dark:bg-gray-600 rounded"></div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <Navbar />
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Profile Settings</h1>
-            <p className="text-gray-600 dark:text-gray-300 mt-1">Manage your account settings and preferences</p>
-          </div>
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Profile Settings</h1>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">Manage your account settings and preferences</p>
+        </div>
 
           {message && (
             <div className="mx-6 mt-4 p-4 rounded-md bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
@@ -299,6 +293,5 @@ export default function ProfilePage() {
           </form>
         </div>
       </div>
-    </div>
   )
 }

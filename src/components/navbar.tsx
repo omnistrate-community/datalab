@@ -104,6 +104,12 @@ export function Navbar({ className = "" }: NavbarProps) {
               >
                 Data
               </Link>
+              <Link
+                href="/usage"
+                className="text-gray-500 hover:text-indigo-600 px-3 py-2 rounded-md text-sm font-medium"
+              >
+                Usage & Billing
+              </Link>
             </nav>
           </div>
 
