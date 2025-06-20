@@ -16,31 +16,37 @@ export async function POST(request: NextRequest) {
   let data: DataRow[] = [];
   let agentType = '';
   let userMessage = '';
+  let hasData = false;
+  let chatHistory: Array<{id: string, type: string, content: string, timestamp: Date}> = [];
+  let columns: string[] = [];
   
   try {
     const body = await request.json();
     prompt = body.prompt;
-    data = body.data;
+    data = body.data || [];
     agentType = body.agentType;
     userMessage = body.userMessage || '';
+    hasData = body.hasData ?? (data.length > 0);
+    chatHistory = body.chatHistory || [];
+    columns = body.columns || [];
 
     // Check if Anthropic API key is configured
     if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === 'your_anthropic_api_key_here') {
       console.warn('Anthropic API key not configured, falling back to intelligent local processing');
-      const response = await processWithLocalLLM(prompt, data, agentType, userMessage);
+      const response = await processWithLocalLLM(prompt, data, agentType, userMessage, hasData, chatHistory);
       return NextResponse.json({ success: true, result: response });
     }
 
     // Use real Claude LLM for data processing
-    const response = await processWithClaude(prompt, data, agentType, userMessage);
+    const response = await processWithClaude(prompt, data, agentType, userMessage, hasData, chatHistory, columns);
 
     return NextResponse.json({ success: true, result: response });
   } catch (error) {
     console.error('LLM API error:', error);
-    // Fallback to local processing if Claude fails and we have the data
-    if (prompt && data.length > 0 && agentType) {
+    // Fallback to local processing if Claude fails
+    if (prompt && agentType) {
       try {
-        const fallbackResponse = await processWithLocalLLM(prompt, data, agentType, userMessage);
+        const fallbackResponse = await processWithLocalLLM(prompt, data, agentType, userMessage, hasData, chatHistory);
         return NextResponse.json({ 
           success: true, 
           result: fallbackResponse,
@@ -58,10 +64,25 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function processWithClaude(prompt: string, data: DataRow[], agentType: string, userMessage?: string): Promise<ProcessingResult> {
-  // Prepare data for LLM analysis
-  const sampleData = data.slice(0, 5); // Send only first 5 rows to avoid token limits
-  const dataSchema = Object.keys(data[0] || {});
+async function processWithClaude(
+  prompt: string, 
+  data: DataRow[], 
+  agentType: string, 
+  userMessage?: string, 
+  hasData?: boolean,
+  chatHistory?: Array<{id: string, type: string, content: string, timestamp: Date}>,
+  columns?: string[]
+): Promise<ProcessingResult> {
+  // Prepare comprehensive data for LLM analysis
+  let sampleData: DataRow[] = [];
+  let dataSchema: string[] = [];
+  
+  if (hasData && data.length > 0) {
+    // Send a meaningful sample of the data (up to 50 rows to balance context vs token limits)
+    const sampleSize = Math.min(50, data.length);
+    sampleData = data.slice(0, sampleSize);
+    dataSchema = columns || Object.keys(data[0] || {});
+  }
   
   const systemPrompts = {
     'remove-duplicates': `You are a data cleaning expert specializing in duplicate detection. When a user asks you questions about their data, engage in a helpful conversation and answer their specific questions. You can also analyze their dataset to identify duplicate records.
@@ -195,34 +216,64 @@ When analyzing data, provide insights about:
 Respond conversationally and provide clear guidance for effective reporting. **Use Markdown formatting extensively** with headers, tables, lists, blockquotes for key insights, and code blocks for examples to create well-structured report content.`
   };
 
-  const userPrompt = `
-Dataset Information:
+  // Build chat history context
+  let chatHistoryContext = '';
+  if (chatHistory && chatHistory.length > 0) {
+    chatHistoryContext = `
+Previous Conversation History:
+${chatHistory.map(msg => `${msg.type === 'user' ? 'User' : 'Assistant'}: ${msg.content}`).join('\n')}
+
+---
+`;
+  }
+
+  const userPrompt = hasData && data.length > 0 ? `
+${chatHistoryContext}Current Dataset Context:
 - Schema: ${dataSchema.join(', ')}
 - Total Rows: ${data.length}
-- Sample Data (first 5 rows):
+- Full Sample Data (first ${sampleData.length} rows):
 ${JSON.stringify(sampleData, null, 2)}
 
 ${userMessage ? `
-User Question: "${userMessage}"
+Current User Question: "${userMessage}"
 
-Please answer the user's specific question directly and conversationally. After addressing their question, you can provide additional relevant insights about their data if helpful.` : `
+Please answer the user's specific question directly and conversationally, taking into account both the conversation history and the full dataset context. Reference specific data points from the dataset when relevant.` : `
 Task: ${prompt}
 
-Please analyze this dataset and provide helpful insights as a ${agentType.replace(/-/g, ' ')} specialist.`}
+Please analyze this complete dataset and provide helpful insights as a ${agentType.replace(/-/g, ' ')} specialist. Reference specific data points and patterns you observe.`}
 
-Important: 
-1. Answer the user's question directly first
-2. Be conversational and helpful
-3. Provide specific insights based on their actual data
-4. **Format your entire response using Markdown** for better readability:
+Important Instructions: 
+1. ALWAYS reference specific data from the dataset in your analysis
+2. Use the conversation history to provide contextual, continuing responses
+3. Answer the user's question directly first, then provide additional insights
+4. Be conversational and helpful, building on previous discussions
+5. **Format your entire response using Markdown** for better readability:
    - Use headers (##, ###) to organize sections
    - Use bullet points and numbered lists for clarity
    - Use **bold** and *italic* text for emphasis
    - Use \`code blocks\` for data examples, formulas, or technical terms
    - Use tables for structured data presentation
    - Use > blockquotes for key insights or recommendations
-5. If you provide additional analysis, format it as JSON only when returning structured data for processing
-6. Focus on being helpful and answering what they actually asked
+6. Quote specific values, patterns, or findings from the actual dataset
+7. Reference previous conversation points when building on earlier discussions
+  ` : `
+${chatHistoryContext}No Data Available Yet
+
+The user is asking: "${userMessage || prompt}"
+
+Please help them by:
+1. **Directly answering their question** in a conversational manner, considering any previous discussion
+2. **Explaining your capabilities** as a ${agentType.replace(/-/g, ' ')} specialist
+3. **Providing guidance** on what types of data would work well with your expertise
+4. **Suggesting preparation steps** they can take before uploading data
+5. **Offering general advice** related to ${agentType.replace(/-/g, ' ')} best practices
+
+Important: 
+- Be conversational and educational
+- **Format your entire response using Markdown** for better readability
+- Use conversation history to maintain context and avoid repeating information
+- Don't mention the lack of data as a limitation - focus on being helpful
+- Provide actionable advice they can use right now
   `;
 
   try {
@@ -311,9 +362,59 @@ function extractInsights(text: string): string[] {
 
 
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-async function processWithLocalLLM(_prompt: string, data: DataRow[], agentType: string, _userMessage?: string): Promise<ProcessingResult> {
-  // Local processing fallback functions
+async function processWithLocalLLM(
+  _prompt: string, 
+  data: DataRow[], 
+  agentType: string, 
+  userMessage?: string, 
+  hasData?: boolean,
+  chatHistory?: Array<{id: string, type: string, content: string, timestamp: Date}>
+): Promise<ProcessingResult> {
+  // If no data is available, provide helpful guidance
+  if (!hasData || data.length === 0) {
+    // Build context from chat history if available
+    let historyContext = '';
+    if (chatHistory && chatHistory.length > 0) {
+      historyContext = `\n\n### Previous Discussion
+${chatHistory.slice(-3).map(msg => `**${msg.type === 'user' ? 'You' : 'Assistant'}:** ${msg.content.substring(0, 200)}...`).join('\n')}
+
+---\n`;
+    }
+
+    return {
+      processedData: [], // Empty array since no data to process
+      analysis: {
+        reasoning: `## Hello! I'm your ${agentType.replace(/-/g, ' ')} assistant 👋
+${historyContext}
+I'd love to help you with your question${userMessage ? `: "${userMessage}"` : ''}!
+
+### What I can do for you:
+${getAgentCapabilities(agentType)}
+
+### To get started:
+1. **Upload your data** using the Upload tab in the workspace
+2. **Come back here** and ask me specific questions about your data
+3. **Get actionable insights** and recommendations
+
+### Data recommendations:
+${getDataRecommendations(agentType)}
+
+Feel free to ask me questions about data processing, best practices, or anything related to ${agentType.replace(/-/g, ' ')}! I'm here to help even before you upload your data.`,
+        insights: [
+          `Ready to help with ${agentType.replace(/-/g, ' ')} tasks`,
+          "Upload data to get started with analysis",
+          "Ask questions anytime for guidance and best practices"
+        ],
+        recommendations: [
+          "Upload your dataset using the Upload tab",
+          "Return to chat with specific questions about your data",
+          "Feel free to ask for guidance on data preparation"
+        ]
+      }
+    };
+  }
+
+  // Local processing fallback functions for when data is available
   switch (agentType) {
     case 'remove-duplicates':
       return removeDuplicatesLocal(data);
@@ -554,22 +655,37 @@ function generateSummaryLocal(data: DataRow[]): ProcessingResult {
     }
   });
   
+  // Create conversational summary with specific data insights
+  const columnInsights = Object.entries(summary).map(([col, info]) => {
+    if (info.type === 'numeric') {
+      const missing = info.missing as number;
+      return `**${col}**: Numeric column ranging from ${info.min} to ${info.max}, with an average of ${(info.mean as number).toFixed(2)}. ${missing > 0 ? `⚠️ ${missing} missing values` : '✅ Complete data'}.`;
+    } else {
+      const missing = info.missing as number;
+      const topValue = (info as {mostCommon: string}).mostCommon;
+      return `**${col}**: Categorical column with ${info.unique} unique values. Most common: "${topValue}". ${missing > 0 ? `⚠️ ${missing} missing values` : '✅ Complete data'}.`;
+    }
+  }).join('\n');
+
   const insights = [];
   const totalCells = data.length * columns.length;
   const missingCells = Object.values(summary).reduce((sum: number, col: Record<string, unknown>) => sum + (col.missing as number || 0), 0);
   const completeness = ((totalCells - missingCells) / totalCells * 100).toFixed(1);
-  insights.push(`Dataset is ${completeness}% complete with ${missingCells} missing values`);
+  const completenessNum = parseFloat(completeness);
   
   const numericCols = Object.entries(summary).filter(([, info]) => info.type === 'numeric');
-  if (numericCols.length > 0) {
-    insights.push(`Found ${numericCols.length} numeric columns suitable for statistical analysis`);
-  }
-  
   const categoricalCols = Object.entries(summary).filter(([, info]) => info.type === 'categorical');
-  if (categoricalCols.length > 0) {
-    insights.push(`Found ${categoricalCols.length} categorical columns suitable for grouping and classification`);
+  
+  insights.push(`Your dataset is **${completeness}% complete** - ${missingCells === 0 ? 'excellent data quality!' : `${missingCells} values need attention`}`);
+  
+  if (numericCols.length > 0) {
+    insights.push(`Found **${numericCols.length} numeric columns** perfect for statistical analysis and visualizations`);
   }
   
+  if (categoricalCols.length > 0) {
+    insights.push(`Identified **${categoricalCols.length} categorical columns** ideal for grouping and classification tasks`);
+  }
+
   return {
     processedData: data,
     analysis: {
@@ -580,7 +696,20 @@ function generateSummaryLocal(data: DataRow[]): ProcessingResult {
         columns: columns.length,
         completeness: `${completeness}%`
       },
-      reasoning: `Generated comprehensive statistical summary for all ${columns.length} columns.`
+      reasoning: `## 📊 Dataset Summary Analysis
+
+I've analyzed your **${data.length} rows × ${columns.length} columns** dataset and here's what I found:
+
+### 🔍 Column Breakdown
+${columnInsights}
+
+### 📈 Key Insights
+${insights.map(insight => `- ${insight}`).join('\n')}
+
+### 💡 Recommendations
+${missingCells > 0 ? `- **Address missing values** in columns with gaps for better analysis quality\n` : ''}${numericCols.length > 0 ? `- **Explore statistical relationships** between your ${numericCols.length} numeric columns\n` : ''}${categoricalCols.length > 0 ? `- **Create visualizations** using your categorical columns for grouping\n` : ''}- **This dataset looks ${completenessNum >= 90 ? 'excellent' : completenessNum >= 70 ? 'good' : 'challenging'}** for analysis with ${completeness}% completeness
+
+Your data is ready for deeper analysis! What specific insights would you like me to explore?`
     }
   };
 }
@@ -783,4 +912,96 @@ function analyzeTrendsLocal(data: DataRow[]): ProcessingResult {
       patterns
     }
   };
+}
+
+function getAgentCapabilities(agentType: string): string {
+  const capabilities = {
+    'remove-duplicates': `
+- **Identify duplicate records** based on exact matches or similarity
+- **Smart deduplication** preserving the most complete records
+- **Explain duplicate patterns** and their potential causes
+- **Recommend deduplication strategies** for your specific dataset`,
+    
+    'handle-missing': `
+- **Detect missing value patterns** and assess data completeness
+- **Suggest appropriate imputation methods** (mean, median, mode, forward fill, etc.)
+- **Handle different data types** with specialized strategies
+- **Explain the impact** of missing values on your analysis`,
+    
+    'normalize-text': `
+- **Standardize text formatting** (case, spacing, encoding)
+- **Clean and normalize** names, addresses, and categorical data
+- **Detect and fix** text inconsistencies and typos
+- **Suggest text transformation** rules for better data quality`,
+    
+    'detect-outliers': `
+- **Identify statistical outliers** using multiple detection methods
+- **Analyze data distribution** and detect anomalies
+- **Explain outlier significance** and potential causes
+- **Recommend outlier handling** strategies for your use case`,
+    
+    'generate-summary': `
+- **Create comprehensive data summaries** with key statistics
+- **Identify data quality issues** and patterns
+- **Generate insights** about your dataset structure
+- **Provide recommendations** for data improvements`,
+    
+    'data-validator': `
+- **Validate data types** and format consistency
+- **Check business rules** and constraints
+- **Identify data quality issues** across all columns
+- **Suggest corrections** for invalid or inconsistent data`
+  };
+  
+  return capabilities[agentType as keyof typeof capabilities] || `
+- **Analyze your data** with specialized algorithms
+- **Provide insights** and recommendations
+- **Help improve data quality** for better analysis
+- **Answer questions** about data processing best practices`;
+}
+
+function getDataRecommendations(agentType: string): string {
+  const recommendations = {
+    'remove-duplicates': `
+- **CSV/Excel files** with potential duplicate records
+- **Customer databases** with overlapping entries
+- **Survey data** that might have multiple submissions
+- **Any tabular data** where uniqueness is important`,
+    
+    'handle-missing': `
+- **Datasets with gaps** or incomplete records
+- **Survey responses** with optional fields
+- **Time series data** with missing timestamps
+- **Any data** where completeness affects analysis quality`,
+    
+    'normalize-text': `
+- **Text-heavy datasets** with names, addresses, or categories
+- **User-generated content** with inconsistent formatting
+- **Imported data** from multiple sources
+- **Any data** with text fields that need standardization`,
+    
+    'detect-outliers': `
+- **Numerical datasets** with potential anomalies
+- **Financial data** with unusual transactions
+- **Scientific measurements** that might have errors
+- **Any quantitative data** where outliers could skew analysis`,
+    
+    'generate-summary': `
+- **Any dataset** you want to understand better
+- **New data sources** you're exploring
+- **Regular data** you want to monitor for changes
+- **Large datasets** that need quick overviews`,
+    
+    'data-validator': `
+- **Critical business data** that must meet specific rules
+- **Data from external sources** that needs validation
+- **User inputs** that require format checking
+- **Any data** where accuracy and consistency are crucial`
+  };
+  
+  return recommendations[agentType as keyof typeof recommendations] || `
+- **Structured data** in CSV, Excel, or JSON format
+- **Clean, tabular data** with clear column headers
+- **Datasets** relevant to your specific analysis needs
+- **Any data** you want to process or analyze`;
 }

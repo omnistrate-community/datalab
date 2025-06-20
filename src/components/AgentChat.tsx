@@ -300,9 +300,18 @@ export default function AgentChat({
           <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white ${agent.color}`}>
             {agent.icon}
           </div>
-          <div>
+          <div className="flex-1">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{agent.name}</h2>
             <p className="text-sm text-gray-600 dark:text-gray-400">{agent.description}</p>
+          </div>
+          <div className="flex items-center space-x-2">
+            <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+              data.length > 0 
+                ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
+                : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+            }`}>
+              {data.length > 0 ? `${data.length} rows loaded` : 'No data yet'}
+            </div>
           </div>
         </div>
       </div>
@@ -318,7 +327,10 @@ export default function AgentChat({
               Start a conversation with {agent.name}
             </h3>
             <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
-              I can help you with {agent.description.toLowerCase()}. What would you like me to do with your data?
+              {data.length > 0 
+                ? `I can help you with ${agent.description.toLowerCase()}. What would you like me to do with your data?`
+                : `I can help you with ${agent.description.toLowerCase()}. Feel free to ask questions about data processing, or upload your data first to get started with analysis.`
+              }
             </p>
           </div>
         )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import AgentSidebar, { Agent, AgentConversation, ChatMessage } from "./AgentSidebar";
 import AgentChat from "./AgentChat";
 import { DataRow } from "@/types";
@@ -197,44 +197,166 @@ const availableAgents: Agent[] = [
   },
 ];
 
+interface DBConversation {
+  id: string;
+  agentId: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+  isActive: boolean;
+  messages: DBMessage[];
+}
+
+interface DBMessage {
+  id: string;
+  type: string;
+  content: string;
+  data: string | null;
+  createdAt: string;
+}
+
 export default function AgentPanel({ data, columns, onDataUpdate }: AgentPanelProps) {
   const [agents, setAgents] = useState<Agent[]>(availableAgents);
   const [conversations, setConversations] = useState<AgentConversation[]>([]);
   const [activeConversation, setActiveConversation] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
-  const createConversation = useCallback((agentId: string) => {
+  // Load conversations from database on component mount
+  useEffect(() => {
+    const loadConversations = async () => {
+      try {
+        const response = await fetch('/api/conversations');
+        if (response.ok) {
+          const { conversations: dbConversations }: { conversations: DBConversation[] } = await response.json();
+          const convertedConversations = dbConversations.map((conv: DBConversation) => ({
+            id: conv.id,
+            agentId: conv.agentId,
+            name: conv.name,
+            messages: conv.messages.map((msg: DBMessage) => ({
+              id: msg.id,
+              type: msg.type as "user" | "agent" | "system",
+              content: msg.content,
+              timestamp: new Date(msg.createdAt),
+              data: msg.data ? JSON.parse(msg.data) : undefined
+            })),
+            createdAt: new Date(conv.createdAt),
+            isActive: conv.isActive
+          }));
+          setConversations(convertedConversations);
+          
+          if (convertedConversations.length > 0 && !activeConversation) {
+            setActiveConversation(convertedConversations[0].id);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load conversations:', error);
+      }
+    };
+    
+    loadConversations();
+  }, [activeConversation]);
+
+  // Remove localStorage effects - now using database
+  // Save conversations to localStorage whenever they change
+  // useEffect(() => {
+  //   try {
+  //     localStorage.setItem('datalab-conversations', JSON.stringify(conversations));
+  //   } catch (error) {
+  //     console.error('Failed to save conversations to localStorage:', error);
+  //   }
+  // }, [conversations]);
+
+  // Save active conversation to localStorage whenever it changes
+  // useEffect(() => {
+  //   if (activeConversation) {
+  //     try {
+  //       localStorage.setItem('datalab-active-conversation', activeConversation);
+  //     } catch (error) {
+  //       console.error('Failed to save active conversation to localStorage:', error);
+  //     }
+  //   }
+  // }, [activeConversation]);
+
+  // Validate active conversation exists, otherwise reset it
+  useEffect(() => {
+    if (activeConversation && !conversations.find(c => c.id === activeConversation)) {
+      setActiveConversation(conversations.length > 0 ? conversations[0].id : null);
+    }
+  }, [activeConversation, conversations]);
+
+  // Helper function to add a conversation with database storage
+  const addConversation = useCallback(async (agentId: string, name: string) => {
+    try {
+      const response = await fetch('/api/conversations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId, name })
+      });
+      
+      if (response.ok) {
+        const { conversation } = await response.json();
+        const newConversation = {
+          id: conversation.id,
+          agentId: conversation.agentId,
+          name: conversation.name,
+          messages: [],
+          createdAt: new Date(conversation.createdAt),
+          isActive: conversation.isActive
+        };
+        
+        setConversations(prev => [newConversation, ...prev]);
+        return newConversation.id;
+      }
+    } catch (error) {
+      console.error('Failed to create conversation:', error);
+    }
+    return null;
+  }, []);
+
+  const createConversation = useCallback(async (agentId: string) => {
     const agent = agents.find(a => a.id === agentId);
     if (!agent) return;
 
-    const newConversation: AgentConversation = {
-      id: `conv-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-      agentId: agentId,
-      name: `${agent.name} Chat`,
-      messages: [],
-      createdAt: new Date(),
-      isActive: true
-    };
-
-    setConversations(prev => [newConversation, ...prev]);
-    setActiveConversation(newConversation.id);
-  }, [agents]);
+    const conversationId = await addConversation(agentId, `${agent.name} Chat`);
+    if (conversationId) {
+      setActiveConversation(conversationId);
+    }
+  }, [agents, addConversation]);
 
   const selectConversation = useCallback((conversationId: string) => {
     setActiveConversation(conversationId);
   }, []);
 
   const sendMessage = useCallback(async (content: string, agentId: string, conversationId: string) => {
-    if (!data.length) return;
+    // Save user message to database first, then add to local state
+    let userMessageId = `msg-${Date.now()}-user`; // fallback ID
+    try {
+      const userMessageResponse = await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId,
+          type: 'user',
+          content
+        })
+      });
+
+      if (userMessageResponse.ok) {
+        const { message: savedUserMessage } = await userMessageResponse.json();
+        userMessageId = savedUserMessage.id;
+      }
+    } catch (error) {
+      console.error('Failed to save user message:', error);
+    }
 
     const userMessage: ChatMessage = {
-      id: `msg-${Date.now()}-user`,
+      id: userMessageId,
       type: "user",
       content,
       timestamp: new Date()
     };
 
-    // Add user message immediately
+    // Add user message to local state
     setConversations(prev => 
       prev.map(conv => 
         conv.id === conversationId 
@@ -255,13 +377,34 @@ export default function AgentPanel({ data, columns, onDataUpdate }: AgentPanelPr
         )
       );
 
-      // Prepare the prompt based on user message and agent type
-      const contextPrompt = `You are an AI agent specialized in ${agentId.replace(/-/g, ' ')}. 
+      // Prepare context-aware prompt based on data availability
+      let contextPrompt: string;
+      
+      if (data.length > 0) {
+        // Data is available - include data context
+        contextPrompt = `You are an AI agent specialized in ${agentId.replace(/-/g, ' ')}. 
 The user has uploaded a dataset with ${data.length} rows and ${columns.length} columns: [${columns.join(', ')}].
 
 User request: ${content}
 
 Please analyze the data and provide insights or perform the requested operation. Be specific and actionable in your response.`;
+      } else {
+        // No data uploaded yet - provide helpful guidance
+        contextPrompt = `You are an AI agent specialized in ${agentId.replace(/-/g, ' ')}. 
+The user hasn't uploaded any data yet, but they're asking: ${content}
+
+Please help them by:
+1. Explaining how you can assist with ${agentId.replace(/-/g, ' ')} tasks
+2. Providing guidance on what data would be suitable for your capabilities
+3. Answering their question in a helpful and conversational manner
+4. Suggesting next steps for uploading and preparing data
+
+Be helpful, conversational, and educational.`;
+      }
+
+      // Get current conversation history (excluding the message we just added)
+      const currentConversation = conversations.find(c => c.id === conversationId);
+      const chatHistory = currentConversation ? currentConversation.messages.slice(0, -1) : []; // Exclude the user message we just added
 
       // Call the LLM API
       const response = await fetch('/api/llm-agent', {
@@ -271,9 +414,12 @@ Please analyze the data and provide insights or perform the requested operation.
         },
         body: JSON.stringify({
           prompt: contextPrompt,
-          data: data,
+          data: data.length > 0 ? data : [], // Send full dataset, not just sample
           agentType: agentId,
-          userMessage: content
+          userMessage: content,
+          hasData: data.length > 0, // Flag to indicate data availability
+          chatHistory: chatHistory, // Include full conversation history
+          columns: columns // Include column information
         })
       });
 
@@ -287,23 +433,41 @@ Please analyze the data and provide insights or perform the requested operation.
         throw new Error(result.error || 'Unknown error occurred');
       }
 
-      // Create agent response message
-      const agentMessage: ChatMessage = {
-        id: `msg-${Date.now()}-agent`,
-        type: "agent",
-        content: result.result.analysis?.reasoning || result.result.message || "Analysis completed successfully",
-        timestamp: new Date(),
-        data: result.result.analysis || result.result
-      };
+      // Create and save agent response message to database
+      const agentMessageContent = result.result.analysis?.reasoning || result.result.message || "Analysis completed successfully";
+      const agentMessageData = result.result.analysis || result.result;
 
-      // Add agent response
-      setConversations(prev => 
-        prev.map(conv => 
-          conv.id === conversationId 
-            ? { ...conv, messages: [...conv.messages, agentMessage] }
-            : conv
-        )
-      );
+      // Save agent response to database
+      const agentMessageResponse = await fetch('/api/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conversationId,
+          type: 'agent',
+          content: agentMessageContent,
+          data: agentMessageData
+        })
+      });
+
+      if (agentMessageResponse.ok) {
+        const { message: savedAgentMessage } = await agentMessageResponse.json();
+        const agentMessage: ChatMessage = {
+          id: savedAgentMessage.id,
+          type: "agent",
+          content: agentMessageContent,
+          timestamp: new Date(savedAgentMessage.createdAt),
+          data: agentMessageData
+        };
+
+        // Add agent response to local state
+        setConversations(prev => 
+          prev.map(conv => 
+            conv.id === conversationId 
+              ? { ...conv, messages: [...conv.messages, agentMessage] }
+              : conv
+          )
+        );
+      }
 
       // Update agent last run time
       setAgents(prev =>
@@ -317,20 +481,55 @@ Please analyze the data and provide insights or perform the requested operation.
     } catch (error) {
       console.error('Agent execution error:', error);
       
-      const errorMessage: ChatMessage = {
-        id: `msg-${Date.now()}-error`,
-        type: "system",
-        content: `Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}`,
-        timestamp: new Date()
-      };
+      const errorContent = `Error: ${error instanceof Error ? error.message : 'Unknown error occurred'}`;
+      
+      // Save error message to database
+      try {
+        const errorMessageResponse = await fetch('/api/messages', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            conversationId,
+            type: 'system',
+            content: errorContent
+          })
+        });
 
-      setConversations(prev => 
-        prev.map(conv => 
-          conv.id === conversationId 
-            ? { ...conv, messages: [...conv.messages, errorMessage] }
-            : conv
-        )
-      );
+        if (errorMessageResponse.ok) {
+          const { message: savedErrorMessage } = await errorMessageResponse.json();
+          const errorMessage: ChatMessage = {
+            id: savedErrorMessage.id,
+            type: "system",
+            content: errorContent,
+            timestamp: new Date(savedErrorMessage.createdAt)
+          };
+
+          setConversations(prev => 
+            prev.map(conv => 
+              conv.id === conversationId 
+                ? { ...conv, messages: [...conv.messages, errorMessage] }
+                : conv
+            )
+          );
+        }
+      } catch (dbError) {
+        console.error('Failed to save error message to database:', dbError);
+        // Fallback to local state only
+        const errorMessage: ChatMessage = {
+          id: `msg-${Date.now()}-error`,
+          type: "system",
+          content: errorContent,
+          timestamp: new Date()
+        };
+
+        setConversations(prev => 
+          prev.map(conv => 
+            conv.id === conversationId 
+              ? { ...conv, messages: [...conv.messages, errorMessage] }
+              : conv
+          )
+        );
+      }
 
       setAgents(prev =>
         prev.map(agent =>
@@ -342,7 +541,7 @@ Please analyze the data and provide insights or perform the requested operation.
     } finally {
       setIsLoading(false);
     }
-  }, [data, columns]);
+  }, [data, columns, conversations]);
 
   const currentConversation = conversations.find(c => c.id === activeConversation);
   const currentAgent = currentConversation ? agents.find(a => a.id === currentConversation.agentId) : null;

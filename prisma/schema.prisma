@@ -59,6 +59,7 @@ model User {
   // Data processing history
   dataUploads   DataUpload[]
   agentRuns     AgentRun[]
+  conversations Conversation[]
 }
 
 model VerificationToken {
@@ -216,6 +217,34 @@ model AgentRun {
   
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  userId    String
+  agentId   String
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([userId, createdAt])
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  conversationId String
+  type           String   // "user" | "agent" | "system"
+  content        String
+  data           String?  // JSON string for analysis results
+  createdAt      DateTime @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
 }
 
 // Enums
