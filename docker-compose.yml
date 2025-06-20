@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  datalab:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=file:/app/data/prisma/dev.db
+      - NEXTAUTH_URL=http://localhost:3000
+      - NEXTAUTH_SECRET=your-super-secret-jwt-secret-replace-in-production
+      # Add your API keys here or use env_file
+      # - ANTHROPIC_API_KEY=your-api-key
+    volumes:
+      # Persist the database
+      - datalab_data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Optional: Add a development service
+  datalab-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3001:3000"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=file:/app/data/prisma/dev.db
+      - NEXTAUTH_URL=http://localhost:3001
+      - NEXTAUTH_SECRET=your-super-secret-jwt-secret-replace-in-production
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+      - datalab_dev_data:/app/data
+    profiles:
+      - dev
+
+volumes:
+  datalab_data:
+  datalab_dev_data:

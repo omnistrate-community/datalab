@@ -164,3 +164,122 @@ Without an API key, agents use intelligent local algorithms:
 - API keys are stored locally in `.env.local`
 - Never commit API keys to version control
 - The `.env.local` file is automatically ignored by Git
+
+## Docker Deployment
+
+DataLab can be easily deployed using Docker for both development and production environments.
+
+### Prerequisites
+- Docker
+- Docker Compose (optional, for easier management)
+
+### Quick Start with Docker
+
+#### Production Deployment
+
+1. **Build and run with Docker Compose** (Recommended):
+```bash
+# Copy environment variables
+cp .env.example .env
+# Edit .env with your configuration
+nano .env
+
+# Build and start the application
+docker-compose up -d
+```
+
+2. **Manual Docker build**:
+```bash
+# Build the image
+docker build -t datalab .
+
+# Run the container
+docker run -d \
+  --name datalab \
+  -p 3000:3000 \
+  -e NEXTAUTH_URL=http://localhost:3000 \
+  -e NEXTAUTH_SECRET=your-super-secret-jwt-secret \
+  -e ANTHROPIC_API_KEY=your-api-key \
+  -v datalab_data:/app/data \
+  datalab
+```
+
+#### Development with Docker
+
+```bash
+# Start development environment
+docker-compose --profile dev up
+```
+
+This will start the development server with hot-reloading on port 3001.
+
+### Environment Variables for Docker
+
+Create a `.env` file in the project root with the following variables:
+
+```env
+# Database
+DATABASE_URL=file:/app/data/prisma/dev.db
+
+# Authentication
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=your-super-secret-jwt-secret-replace-in-production
+
+# AI API Keys
+ANTHROPIC_API_KEY=your-anthropic-api-key
+
+# Optional: OAuth providers
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+GITHUB_ID=your-github-id
+GITHUB_SECRET=your-github-secret
+```
+
+### Docker Configuration Files
+
+- **`Dockerfile`**: Production build with multi-stage optimization
+- **`Dockerfile.dev`**: Development build with hot-reloading
+- **`docker-compose.yml`**: Orchestration for both production and development
+- **`.dockerignore`**: Optimizes build context and image size
+
+### Health Checks
+
+The container includes health checks available at `/api/health`:
+
+```bash
+# Check container health
+curl http://localhost:3000/api/health
+```
+
+### Data Persistence
+
+The SQLite database is persisted using Docker volumes:
+- Production: `datalab_data` volume
+- Development: `datalab_dev_data` volume
+
+### Production Deployment Tips
+
+1. **Use environment files**: Create production-specific `.env` files
+2. **SSL/TLS**: Use a reverse proxy (nginx, traefik) for HTTPS
+3. **Monitoring**: Add logging and monitoring solutions
+4. **Backup**: Regularly backup the database volume
+5. **Updates**: Use rolling updates for zero-downtime deployments
+
+### Scaling and Load Balancing
+
+For high-traffic deployments:
+
+```yaml
+# docker-compose.production.yml
+version: '3.8'
+services:
+  datalab:
+    image: datalab:latest
+    deploy:
+      replicas: 3
+      update_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+```
