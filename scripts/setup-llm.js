@@ -35,13 +35,17 @@ ANTHROPIC_API_KEY=${apiKey}
 }
 
 function main() {
-  console.log('🤖 DataLab Claude Setup');
-  console.log('=======================');
+  console.log('🤖 DataLab AI Setup');
+  console.log('===================');
   console.log();
-  console.log('This script will configure your Anthropic API key for real Claude LLM processing.');
-  console.log('Without an API key, the app will use intelligent local processing instead.');
+  console.log('DataLab supports multiple AI processing backends:');
+  console.log('• Claude (Anthropic) - Cloud-based AI with high capability');
+  console.log('• vLLM - Local AI server for privacy and cost control');
+  console.log('• Local Processing - Intelligent fallback (always available)');
   console.log();
-  console.log('To get an API key:');
+  console.log('This script configures Claude. For vLLM setup, run: npm run setup-vllm');
+  console.log();
+  console.log('To get a Claude API key:');
   console.log('1. Visit https://console.anthropic.com/');
   console.log('2. Create a new API key');
   console.log('3. Copy the key and paste it below');

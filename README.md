@@ -8,8 +8,8 @@ DataLab is a modern, AI-powered data processing application built with Next.js, 
 - **Data Cleaning Agents**: Remove duplicates, handle missing values, normalize text
 - **Analysis Agents**: Detect outliers, generate statistical summaries
 - **Transformation Agents**: Data type conversion, column operations
-- **Real LLM Integration**: Uses Anthropic Claude for intelligent data processing
-- **Fallback Processing**: Intelligent local processing when LLM is unavailable
+- **Multiple AI Backends**: vLLM (local), Claude (cloud), or intelligent local processing
+- **Automatic Fallback**: Seamless fallback between AI processing modes
 
 ### 📊 Interactive Visualizations
 - Bar charts, line charts, pie charts, and scatter plots
@@ -126,9 +126,16 @@ This project is licensed under the MIT License.
 
 ## LLM Configuration
 
-DataLab supports real AI processing through Anthropic's Claude models. The application provides two modes:
+DataLab supports multiple AI processing backends with automatic fallback. The application provides three modes:
 
-### 🤖 Real LLM Mode (Recommended)
+### 🚀 vLLM Mode (Local AI Server)
+When configured with a vLLM endpoint, agents use your local AI server for:
+- Full control over your AI models and data privacy
+- Support for various open-source models (Phi-3, Llama, etc.)
+- No external API dependencies
+- Cost-effective processing for large datasets
+
+### 🤖 Claude Mode (Cloud AI)
 When configured with an Anthropic API key, agents use Claude-3-Haiku for:
 - Intelligent duplicate detection based on semantic similarity
 - Smart missing value imputation strategies
@@ -137,7 +144,7 @@ When configured with an Anthropic API key, agents use Claude-3-Haiku for:
 - Comprehensive data insights and patterns
 
 ### 🔧 Local Processing Mode (Fallback)
-Without an API key, agents use intelligent local algorithms:
+Without external AI, agents use intelligent local algorithms:
 - Rule-based duplicate removal
 - Statistical imputation (median/mode)
 - Standard text normalization
@@ -146,19 +153,57 @@ Without an API key, agents use intelligent local algorithms:
 
 ### Configuration Options
 
-1. **Interactive Setup** (Recommended):
+1. **vLLM Configuration** (Self-hosted AI):
+   ```env
+   VLLM_ENDPOINT_URL=http://localhost:8000
+   VLLM_MODEL_NAME=microsoft/Phi-3-mini-4k-instruct
+   ```
+
+2. **Claude Configuration** (Anthropic API):
+   ```env
+   ANTHROPIC_API_KEY=your_anthropic_api_key_here
+   ```
+
+3. **Interactive Setup**:
    ```bash
    npm run setup-llm
    ```
 
-2. **Manual Configuration**:
-   Create `.env.local` in the project root:
-   ```env
-   ANTHROPIC_API_KEY=your_api_key_here
+4. **Manual Configuration**:
+   Create `.env.local` in the project root with your preferred configuration.
+
+### Processing Priority
+DataLab automatically selects the best available processing method:
+1. **vLLM** (if `VLLM_ENDPOINT_URL` is configured)
+2. **Claude** (if `ANTHROPIC_API_KEY` is configured)
+3. **Local Processing** (always available as fallback)
+
+### Environment Variables
+- `VLLM_ENDPOINT_URL`: Your vLLM server endpoint (e.g., http://localhost:8000)
+- `VLLM_MODEL_NAME`: Model name for vLLM (default: microsoft/Phi-3-mini-4k-instruct)
+- `ANTHROPIC_API_KEY`: Your Anthropic API key for Claude processing
+
+### Setting up vLLM (Optional)
+To use vLLM for local AI processing:
+
+1. **Install vLLM**:
+   ```bash
+   pip install vllm
    ```
 
-3. **Environment Variables**:
-   - `ANTHROPIC_API_KEY`: Your Anthropic API key for Claude processing
+2. **Start vLLM server**:
+   ```bash
+   python -m vllm.entrypoints.openai.api_server \
+     --model microsoft/Phi-3-mini-4k-instruct \
+     --host 0.0.0.0 \
+     --port 8000
+   ```
+
+3. **Configure DataLab**:
+   ```env
+   VLLM_ENDPOINT_URL=http://localhost:8000
+   VLLM_MODEL_NAME=microsoft/Phi-3-mini-4k-instruct
+   ```
 
 ### API Key Security
 - API keys are stored locally in `.env.local`

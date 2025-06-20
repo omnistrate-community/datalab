@@ -258,6 +258,7 @@ export default function AgentPanel({ data, columns, onDataUpdate }: AgentPanelPr
   
   // Performance tracking
   const [agentPerformance, setAgentPerformance] = useState<Map<string, AgentPerformance>>(new Map());
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [analytics, setAnalytics] = useState<AnalyticsEvent[]>([]);
 
   // Analytics tracking function
@@ -485,6 +486,7 @@ export default function AgentPanel({ data, columns, onDataUpdate }: AgentPanelPr
   }, []);
 
   // Enhanced retry logic with exponential backoff
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const retryWithBackoff = useCallback(async (operation: () => Promise<any>, maxRetries = 3): Promise<any> => {
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
@@ -999,7 +1001,7 @@ Please consider these data quality aspects in your analysis and mention them if 
             🤖 Recommended Agents for Your Data
           </h3>
           <div className="space-y-1">
-            {agentRecommendations.slice(0, 3).map((recommendation: AgentRecommendation, index: number) => {
+            {agentRecommendations.slice(0, 3).map((recommendation: AgentRecommendation) => {
               const agent = agents.find(a => a.id === recommendation.agentId);
               return (
                 <div key={recommendation.agentId} className="flex items-center justify-between bg-white dark:bg-gray-800 rounded-lg p-2 border border-blue-200 dark:border-blue-600">
