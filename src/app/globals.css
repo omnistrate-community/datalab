@@ -24,3 +24,59 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Enhanced markdown styling for both light and dark modes */
+.prose code:not(pre code) {
+  background-color: theme('colors.gray.100');
+  color: theme('colors.gray.900');
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.dark .prose code:not(pre code) {
+  background-color: theme('colors.gray.800');
+  color: theme('colors.gray.100');
+}
+
+.prose pre {
+  background-color: theme('colors.gray.100');
+  border: 1px solid theme('colors.gray.200');
+}
+
+.dark .prose pre {
+  background-color: theme('colors.gray.800');
+  border: 1px solid theme('colors.gray.700');
+}
+
+/* Syntax highlighting adjustments for dark mode */
+@media (prefers-color-scheme: dark) {
+  .hljs {
+    background: theme('colors.gray.800') !important;
+    color: theme('colors.gray.100') !important;
+  }
+}
+
+/* Table styling improvements */
+.prose table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.prose th, .prose td {
+  border: 1px solid theme('colors.gray.200');
+  padding: 0.5rem;
+}
+
+.dark .prose th, .dark .prose td {
+  border-color: theme('colors.gray.700');
+}
+
+.prose th {
+  background-color: theme('colors.gray.50');
+  font-weight: 600;
+}
+
+.dark .prose th {
+  background-color: theme('colors.gray.800');
+}

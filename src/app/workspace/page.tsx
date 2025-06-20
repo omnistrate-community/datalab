@@ -4,7 +4,7 @@ import { useState } from "react";
 import { Upload, FileText, BarChart3 } from "lucide-react";
 import FileUpload from "@/components/FileUpload";
 import DataTable from "@/components/DataTable";
-import AgentPanel from "@/components/AgentPanel";
+import AgentPanel from "@/components/AgentPanelNew";
 import VisualizationPanel from "@/components/VisualizationPanel";
 import { DataRow } from "@/types";
 

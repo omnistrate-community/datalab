@@ -3,13 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { 
   DataRow, 
   ProcessingResult, 
-  DuplicateAnalysis, 
-  MissingValueAnalysis, 
-  TextNormalizationAnalysis, 
-  OutlierAnalysis, 
-  SummaryAnalysis,
-  OutlierInfo,
-  ColumnSummary
+  OutlierInfo
 } from '@/types';
 
 // Initialize Anthropic client
@@ -21,22 +15,24 @@ export async function POST(request: NextRequest) {
   let prompt = '';
   let data: DataRow[] = [];
   let agentType = '';
+  let userMessage = '';
   
   try {
     const body = await request.json();
     prompt = body.prompt;
     data = body.data;
     agentType = body.agentType;
+    userMessage = body.userMessage || '';
 
     // Check if Anthropic API key is configured
     if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === 'your_anthropic_api_key_here') {
       console.warn('Anthropic API key not configured, falling back to intelligent local processing');
-      const response = await processWithLocalLLM(prompt, data, agentType);
+      const response = await processWithLocalLLM(prompt, data, agentType, userMessage);
       return NextResponse.json({ success: true, result: response });
     }
 
     // Use real Claude LLM for data processing
-    const response = await processWithClaude(prompt, data, agentType);
+    const response = await processWithClaude(prompt, data, agentType, userMessage);
 
     return NextResponse.json({ success: true, result: response });
   } catch (error) {
@@ -44,7 +40,7 @@ export async function POST(request: NextRequest) {
     // Fallback to local processing if Claude fails and we have the data
     if (prompt && data.length > 0 && agentType) {
       try {
-        const fallbackResponse = await processWithLocalLLM(prompt, data, agentType);
+        const fallbackResponse = await processWithLocalLLM(prompt, data, agentType, userMessage);
         return NextResponse.json({ 
           success: true, 
           result: fallbackResponse,
@@ -62,48 +58,171 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function processWithClaude(prompt: string, data: DataRow[], agentType: string): Promise<ProcessingResult> {
+async function processWithClaude(prompt: string, data: DataRow[], agentType: string, userMessage?: string): Promise<ProcessingResult> {
   // Prepare data for LLM analysis
   const sampleData = data.slice(0, 5); // Send only first 5 rows to avoid token limits
   const dataSchema = Object.keys(data[0] || {});
   
   const systemPrompts = {
-    'remove-duplicates': `You are a data cleaning expert. Analyze the provided dataset and identify duplicate records. Return a JSON response with:
-    - duplicateRows: array of row indices (0-based) that should be removed
-    - reasoning: explanation of your duplicate detection criteria
-    - analysis: summary of findings`,
+    'remove-duplicates': `You are a data cleaning expert specializing in duplicate detection. When a user asks you questions about their data, engage in a helpful conversation and answer their specific questions. You can also analyze their dataset to identify duplicate records.
+
+When analyzing data, provide insights about:
+- Duplicate detection criteria and methods
+- Number and types of duplicates found
+- Recommendations for handling duplicates
+- Impact on data quality
+
+Always respond conversationally to user questions first, then provide additional insights if relevant. **Format your responses using Markdown** for better readability - use headers, lists, code blocks, and emphasis where appropriate.`,
     
-    'handle-missing': `You are a data imputation expert. Analyze the dataset and suggest how to handle missing values. Return a JSON response with:
-    - strategies: object mapping column names to imputation strategies
-    - fillValues: object mapping column names to values to use for filling
-    - reasoning: explanation of chosen strategies`,
+    'handle-missing': `You are a data imputation expert. Engage conversationally with users about their missing data concerns. Answer their specific questions about missing values, data completeness, and imputation strategies.
+
+When analyzing data, provide insights about:
+- Missing value patterns and causes
+- Recommended imputation strategies for each column
+- Impact of different imputation methods
+- Data quality implications
+
+Always prioritize answering the user's direct questions in a helpful, conversational manner. **Use Markdown formatting** including headers, bullet points, tables, and code blocks to make your responses clear and well-structured.`,
     
-    'normalize-text': `You are a data standardization expert. Analyze text fields and suggest normalization. Return a JSON response with:
-    - transformations: array of transformation rules to apply
-    - textColumns: array of column names that contain text
-    - reasoning: explanation of normalization approach`,
+    'normalize-text': `You are a data standardization expert. Help users understand and improve their text data quality. Answer their specific questions about text formatting, standardization, and cleaning.
+
+When analyzing data, provide insights about:
+- Text quality issues and inconsistencies
+- Standardization opportunities
+- Encoding and formatting problems
+- Recommended normalization approaches
+
+Respond conversationally to user questions and provide actionable advice. **Use Markdown formatting** with headers, lists, code examples, and emphasis to make your guidance clear and actionable.`,
     
-    'detect-outliers': `You are a statistical analysis expert. Identify outliers in numeric data. Return a JSON response with:
-    - outliers: object mapping column names to arrays of outlier row indices
-    - method: statistical method used for detection
-    - reasoning: explanation of outlier detection criteria`,
+    'detect-outliers': `You are a statistical analysis expert specializing in outlier detection. Engage with users about their data anomalies and statistical concerns. Answer their specific questions about outliers, data distribution, and statistical patterns.
+
+When analyzing data, provide insights about:
+- Outlier detection methods and results
+- Statistical significance of anomalies
+- Potential causes of outliers
+- Recommendations for handling outliers
+
+Always respond to user questions directly and provide context for your analysis. **Format responses using Markdown** with proper headers, tables for statistics, code blocks for formulas, and emphasis for key points.`,
     
-    'generate-summary': `You are a data analyst. Generate comprehensive insights about this dataset. Return a JSON response with:
-    - insights: array of key findings and patterns
-    - dataShape: object with rows, columns, completeness info
-    - summary: detailed analysis of each column
-    - reasoning: overall assessment of data quality and characteristics`
+    'generate-summary': `You are a data analyst who helps users understand their datasets. Engage conversationally and answer specific questions about data characteristics, patterns, and quality.
+
+When analyzing data, provide insights about:
+- Dataset overview and key characteristics
+- Data quality assessment
+- Notable patterns and distributions
+- Recommendations for further analysis
+
+Focus on answering user questions clearly and providing helpful context about their data. **Use Markdown formatting** including headers, tables, lists, and code blocks to present your analysis in a structured, readable format.`,
+
+    'data-validator': `You are a data quality expert. Help users understand data validation issues and quality problems. Answer their specific questions about data types, formats, and validation errors.
+
+When analyzing data, provide insights about:
+- Data type inconsistencies
+- Format validation issues
+- Business rule violations
+- Data quality recommendations
+
+Engage conversationally and provide actionable advice for data quality improvements. **Use Markdown formatting** with headers, lists, tables, and code examples to clearly present validation results and recommendations.`,
+
+    'column-transformer': `You are a data transformation expert. Help users transform and reshape their data. Answer their specific questions about column operations, data reshaping, and feature engineering.
+
+When analyzing data, provide insights about:
+- Column transformation opportunities
+- Data type conversions
+- Feature derivation possibilities
+- Data restructuring recommendations
+
+Respond conversationally to user needs and provide practical transformation advice. **Format your responses with Markdown** using headers, code blocks for transformation examples, lists for recommendations, and tables for comparisons.`,
+
+    'data-aggregator': `You are a data aggregation expert. Help users summarize and group their data effectively. Answer their specific questions about aggregation methods, grouping strategies, and summary statistics.
+
+When analyzing data, provide insights about:
+- Optimal grouping columns
+- Appropriate aggregation functions
+- Summary statistics and trends
+- Data aggregation best practices
+
+Engage conversationally and provide tailored aggregation recommendations. **Use Markdown formatting** with headers, tables for results, code blocks for examples, and lists for recommendations.`,
+
+    'correlation-analyzer': `You are a correlation analysis expert. Help users discover relationships in their data. Answer their specific questions about correlations, relationships, and statistical dependencies.
+
+When analyzing data, provide insights about:
+- Correlation coefficients and significance
+- Strong and weak relationships
+- Causal vs correlational relationships
+- Statistical interpretation
+
+Respond conversationally and explain correlations in understandable terms. **Use Markdown formatting** with headers, tables for correlation matrices, code blocks for statistical formulas, and emphasis for key findings.`,
+
+    'trend-analyzer': `You are a time-series and trend analysis expert. Help users understand patterns and trends in their data. Answer their specific questions about temporal patterns, seasonality, and forecasting.
+
+When analyzing data, provide insights about:
+- Trend identification and analysis
+- Seasonal patterns and cycles
+- Data evolution over time
+- Forecasting opportunities
+
+Engage conversationally and provide clear explanations of temporal patterns. **Format responses using Markdown** with headers, tables for trend data, lists for observations, and code blocks for time series examples.`,
+
+    'pattern-finder': `You are a pattern recognition expert using ML techniques. Help users discover hidden patterns and structures in their data. Answer their specific questions about clustering, classification, and pattern discovery.
+
+When analyzing data, provide insights about:
+- Hidden patterns and clusters
+- Data groupings and segments
+- Anomalous patterns
+- Machine learning opportunities
+
+Respond conversationally and explain patterns in accessible language. **Use Markdown formatting** including headers, lists for pattern descriptions, tables for cluster summaries, and code blocks for ML examples.`,
+
+    'chart-recommender': `You are a data visualization expert. Help users choose the best ways to visualize their data. Answer their specific questions about chart types, visualization best practices, and data presentation.
+
+When analyzing data, provide insights about:
+- Optimal chart types for different data
+- Visualization best practices
+- Data storytelling opportunities
+- Interactive visualization suggestions
+
+Engage conversationally and provide practical visualization advice. **Format responses with Markdown** using headers, tables for chart recommendations, lists for best practices, and code blocks for visualization examples.`,
+
+    'report-generator': `You are a report generation expert. Help users create comprehensive data reports and summaries. Answer their specific questions about report structure, key findings, and data presentation.
+
+When analyzing data, provide insights about:
+- Report structure and organization
+- Key findings and takeaways
+- Data storytelling elements
+- Professional presentation tips
+
+Respond conversationally and provide clear guidance for effective reporting. **Use Markdown formatting extensively** with headers, tables, lists, blockquotes for key insights, and code blocks for examples to create well-structured report content.`
   };
 
   const userPrompt = `
-Dataset Schema: ${dataSchema.join(', ')}
-Total Rows: ${data.length}
-Sample Data (first 5 rows):
+Dataset Information:
+- Schema: ${dataSchema.join(', ')}
+- Total Rows: ${data.length}
+- Sample Data (first 5 rows):
 ${JSON.stringify(sampleData, null, 2)}
 
-User Request: ${prompt}
+${userMessage ? `
+User Question: "${userMessage}"
 
-Please analyze this dataset according to the agent type "${agentType}" and provide your recommendations.
+Please answer the user's specific question directly and conversationally. After addressing their question, you can provide additional relevant insights about their data if helpful.` : `
+Task: ${prompt}
+
+Please analyze this dataset and provide helpful insights as a ${agentType.replace(/-/g, ' ')} specialist.`}
+
+Important: 
+1. Answer the user's question directly first
+2. Be conversational and helpful
+3. Provide specific insights based on their actual data
+4. **Format your entire response using Markdown** for better readability:
+   - Use headers (##, ###) to organize sections
+   - Use bullet points and numbered lists for clarity
+   - Use **bold** and *italic* text for emphasis
+   - Use \`code blocks\` for data examples, formulas, or technical terms
+   - Use tables for structured data presentation
+   - Use > blockquotes for key insights or recommendations
+5. If you provide additional analysis, format it as JSON only when returning structured data for processing
+6. Focus on being helpful and answering what they actually asked
   `;
 
   try {
@@ -122,22 +241,32 @@ Please analyze this dataset according to the agent type "${agentType}" and provi
       throw new Error('Invalid response type from Claude');
     }
 
-    // Parse the JSON response
-    let llmResult: Record<string, unknown>;
-    try {
-      llmResult = JSON.parse(response.text);
-    } catch {
-      // If parsing fails, extract JSON from response
-      const jsonMatch = response.text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        llmResult = JSON.parse(jsonMatch[0]);
-      } else {
-        throw new Error('Invalid JSON response from Claude');
+    const responseText = response.text;
+    
+    // For conversational responses, we'll create a structured analysis object
+    // but keep the main response as the conversational text
+    const analysis = {
+      reasoning: responseText,
+      insights: extractInsights(responseText),
+      agentType,
+      conversational: true
+    };
+
+    // Try to extract any structured data from the response
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      try {
+        const structuredData = JSON.parse(jsonMatch[0]);
+        Object.assign(analysis, structuredData);
+      } catch {
+        // If JSON parsing fails, continue with conversational response
       }
     }
 
-    // Apply the LLM recommendations to the actual data
-    return applyLLMRecommendations(data, llmResult, agentType);
+    return {
+      analysis,
+      processedData: data // Keep original data unless specific processing is requested
+    };
 
   } catch (error) {
     console.error('Claude API error:', error);
@@ -145,105 +274,45 @@ Please analyze this dataset according to the agent type "${agentType}" and provi
   }
 }
 
-function applyLLMRecommendations(data: DataRow[], llmResult: Record<string, unknown>, agentType: string): ProcessingResult {
-  switch (agentType) {
-    case 'remove-duplicates':
-      const duplicateIndices = Array.isArray(llmResult.duplicateRows) ? llmResult.duplicateRows as number[] : [];
-      const cleanData = data.filter((_, index) => !duplicateIndices.includes(index));
-      return {
-        processedData: cleanData,
-        analysis: {
-          originalCount: data.length,
-          duplicatesFound: duplicateIndices.length,
-          finalCount: cleanData.length,
-          duplicateRows: duplicateIndices.map((i: number) => i + 1),
-          reasoning: (llmResult.reasoning as string) || 'Claude-based duplicate detection',
-          llmAnalysis: llmResult.analysis
-        } as DuplicateAnalysis
-      };
-
-    case 'handle-missing':
-      const strategies = (llmResult.strategies as Record<string, string>) || {};
-      const fillValues = (llmResult.fillValues as Record<string, unknown>) || {};
-      const processedData = data.map(row => {
-        const newRow = { ...row };
-        Object.entries(fillValues).forEach(([col, value]) => {
-          if (newRow[col] === null || newRow[col] === undefined || newRow[col] === '') {
-            newRow[col] = value as string | number | boolean | null | undefined;
-          }
-        });
-        return newRow;
-      });
-      return {
-        processedData,
-        analysis: {
-          strategies,
-          fillValues,
-          columnsProcessed: Object.keys(strategies).length,
-          reasoning: (llmResult.reasoning as string) || 'Claude-based missing value imputation'
-        } as MissingValueAnalysis
-      };
-
-    case 'normalize-text':
-      const textColumns = Array.isArray(llmResult.textColumns) ? llmResult.textColumns as string[] : [];
-      const normalizedData = data.map(row => {
-        const newRow = { ...row };
-        textColumns.forEach((col: string) => {
-          if (typeof newRow[col] === 'string') {
-            // Apply basic normalization
-            newRow[col] = (newRow[col] as string).trim().replace(/\s+/g, ' ');
-          }
-        });
-        return newRow;
-      });
-      return {
-        processedData: normalizedData,
-        analysis: {
-          textColumns,
-          transformations: Array.isArray(llmResult.transformations) ? llmResult.transformations as string[] : [],
-          reasoning: (llmResult.reasoning as string) || 'Claude-based text normalization'
-        } as TextNormalizationAnalysis
-      };
-
-    case 'detect-outliers':
-      const outliers = (llmResult.outliers as Record<string, OutlierInfo[]>) || {};
-      return {
-        processedData: data,
-        analysis: {
-          outliers,
-          numericColumns: Object.keys(outliers),
-          method: (llmResult.method as string) || 'Claude-based detection',
-          totalOutliers: Object.values(outliers).reduce((sum: number, arr: OutlierInfo[]) => sum + arr.length, 0),
-          reasoning: (llmResult.reasoning as string) || 'Claude-based outlier detection'
-        } as OutlierAnalysis
-      };
-
-    case 'generate-summary':
-      const summary = (llmResult.summary as Record<string, ColumnSummary>) || {};
-      const insights = Array.isArray(llmResult.insights) ? llmResult.insights as string[] : [];
-      const dataShape = (llmResult.dataShape as { rows: number; columns: number; completeness?: string }) || { 
-        rows: data.length, 
-        columns: Object.keys(data[0] || {}).length 
-      };
-      return {
-        processedData: data,
-        analysis: {
-          insights,
-          dataShape: {
-            ...dataShape,
-            completeness: dataShape.completeness || '100%'
-          },
-          summary,
-          reasoning: (llmResult.reasoning as string) || 'Claude-based data analysis'
-        } as SummaryAnalysis
-      };
-
-    default:
-      throw new Error(`Unknown agent type: ${agentType}`);
+// Helper function to extract insights from conversational text
+function extractInsights(text: string): string[] {
+  const insights: string[] = [];
+  
+  // Look for bullet points, numbered lists, or key findings
+  const bulletRegex = /[•\-\*]\s*([^\n]+)/g;
+  const numberedRegex = /\d+\.\s*([^\n]+)/g;
+  const keyFindingsRegex = /(?:key findings?|insights?|important points?)[:\s]*([^\n]+)/gi;
+  
+  let match;
+  
+  // Extract bullet points
+  while ((match = bulletRegex.exec(text)) !== null) {
+    insights.push(match[1].trim());
   }
+  
+  // Extract numbered points
+  while ((match = numberedRegex.exec(text)) !== null) {
+    insights.push(match[1].trim());
+  }
+  
+  // Extract key findings
+  while ((match = keyFindingsRegex.exec(text)) !== null) {
+    insights.push(match[1].trim());
+  }
+  
+  // If no structured insights found, split into sentences and take meaningful ones
+  if (insights.length === 0) {
+    const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 20);
+    insights.push(...sentences.slice(0, 3).map(s => s.trim()));
+  }
+  
+  return insights.slice(0, 5); // Limit to 5 insights
 }
 
-async function processWithLocalLLM(_prompt: string, data: DataRow[], agentType: string): Promise<ProcessingResult> {
+
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function processWithLocalLLM(_prompt: string, data: DataRow[], agentType: string, _userMessage?: string): Promise<ProcessingResult> {
   // Local processing fallback functions
   switch (agentType) {
     case 'remove-duplicates':
@@ -256,8 +325,28 @@ async function processWithLocalLLM(_prompt: string, data: DataRow[], agentType: 
       return detectOutliersLocal(data);
     case 'generate-summary':
       return generateSummaryLocal(data);
+    case 'data-validator':
+      return validateDataLocal(data);
+    case 'correlation-analyzer':
+      return analyzeCorrelationsLocal(data);
+    case 'trend-analyzer':
+      return analyzeTrendsLocal(data);
     default:
-      throw new Error(`Unknown agent type: ${agentType}`);
+      // For new agent types without specific local implementation,
+      // return a generic response
+      return {
+        analysis: {
+          reasoning: `This is a ${agentType.replace(/-/g, ' ')} agent. Local processing is limited, but I can provide basic insights about your ${data.length} row dataset with columns: ${Object.keys(data[0] || {}).join(', ')}.`,
+          insights: [
+            `Dataset contains ${data.length} rows`,
+            `Available columns: ${Object.keys(data[0] || {}).join(', ')}`,
+            "For advanced analysis, configure an LLM API key in your settings"
+          ],
+          agentType,
+          localFallback: true
+        },
+        processedData: data
+      };
   }
 }
 
@@ -284,7 +373,7 @@ function removeDuplicatesLocal(data: DataRow[]): ProcessingResult {
       finalCount: cleanData.length,
       duplicateRows: duplicates.map(i => i + 1),
       reasoning: `Identified ${duplicates.length} duplicate rows based on exact field matching.`
-    } as DuplicateAnalysis
+    }
   };
 }
 
@@ -335,8 +424,10 @@ function handleMissingLocal(data: DataRow[]): ProcessingResult {
       strategies,
       fillValues,
       columnsProcessed: Object.keys(strategies).length,
-      reasoning: 'Applied statistical imputation strategies for missing values.'
-    } as MissingValueAnalysis
+      reasoning: 'Applied statistical imputation strategies for missing values.',
+      missingValues: {},
+      insights: [`Processed ${Object.keys(strategies).length} columns with missing values`]
+    }
   };
 }
 
@@ -364,8 +455,9 @@ function normalizeTextLocal(data: DataRow[]): ProcessingResult {
     analysis: {
       textColumns,
       transformations: ['Trimmed whitespace', 'Normalized spaces', 'Applied capitalization'],
-      reasoning: `Normalized text in ${textColumns.length} columns using standard formatting rules.`
-    } as TextNormalizationAnalysis
+      reasoning: `Normalized text in ${textColumns.length} columns using standard formatting rules.`,
+      insights: [`Processed ${textColumns.length} text columns`]
+    }
   };
 }
 
@@ -412,14 +504,15 @@ function detectOutliersLocal(data: DataRow[]): ProcessingResult {
       outliers,
       totalOutliers: Object.values(outliers).reduce((sum, arr) => sum + arr.length, 0),
       method: 'IQR (Interquartile Range)',
-      reasoning: `Used IQR method to detect outliers in ${numericColumns.length} numeric columns.`
-    } as OutlierAnalysis
+      reasoning: `Used IQR method to detect outliers in ${numericColumns.length} numeric columns.`,
+      statistics: {}
+    }
   };
 }
 
 function generateSummaryLocal(data: DataRow[]): ProcessingResult {
   const columns = Object.keys(data[0] || {});
-  const summary: Record<string, ColumnSummary> = {};
+  const summary: Record<string, Record<string, unknown>> = {};
   
   columns.forEach(col => {
     const values = data.map(row => row[col]).filter(val => val !== null && val !== undefined && val !== '');
@@ -432,13 +525,12 @@ function generateSummaryLocal(data: DataRow[]): ProcessingResult {
       
       summary[col] = {
         type: 'numeric',
-        count: totalValues,
         missing: missingValues,
+        unique: new Set(numbers).size,
         min: Math.min(...numbers),
         max: Math.max(...numbers),
         mean: numbers.reduce((sum, val) => sum + val, 0) / numbers.length,
-        median: sorted[Math.floor(sorted.length / 2)],
-        uniqueValues: new Set(numbers).size
+        median: sorted[Math.floor(sorted.length / 2)]
       };
     } else {
       const freq: Record<string, number> = {};
@@ -454,17 +546,17 @@ function generateSummaryLocal(data: DataRow[]): ProcessingResult {
       
       summary[col] = {
         type: 'categorical',
-        count: totalValues,
         missing: missingValues,
-        uniqueValues: Object.keys(freq).length,
-        topValues
+        unique: Object.keys(freq).length,
+        mostCommon: topValues[0]?.value || '',
+        samples: topValues.map(tv => tv.value)
       };
     }
   });
   
   const insights = [];
   const totalCells = data.length * columns.length;
-  const missingCells = Object.values(summary).reduce((sum: number, col: ColumnSummary) => sum + col.missing, 0);
+  const missingCells = Object.values(summary).reduce((sum: number, col: Record<string, unknown>) => sum + (col.missing as number || 0), 0);
   const completeness = ((totalCells - missingCells) / totalCells * 100).toFixed(1);
   insights.push(`Dataset is ${completeness}% complete with ${missingCells} missing values`);
   
@@ -489,6 +581,206 @@ function generateSummaryLocal(data: DataRow[]): ProcessingResult {
         completeness: `${completeness}%`
       },
       reasoning: `Generated comprehensive statistical summary for all ${columns.length} columns.`
-    } as SummaryAnalysis
+    }
+  };
+}
+
+function validateDataLocal(data: DataRow[]): ProcessingResult {
+  if (!data.length) {
+    return {
+      processedData: data,
+      analysis: {
+        reasoning: "No data to validate",
+        insights: ["Dataset is empty"],
+        validationErrors: [],
+        dataTypes: {}
+      }
+    };
+  }
+
+  const columns = Object.keys(data[0]);
+  const validationErrors: string[] = [];
+  const dataTypes: Record<string, string> = {};
+
+  columns.forEach(col => {
+    const values = data.map(row => row[col]).filter(val => val != null && val !== '');
+    
+    if (values.length === 0) {
+      dataTypes[col] = 'empty';
+      validationErrors.push(`Column '${col}' contains only null/empty values`);
+      return;
+    }
+
+    // Detect data type
+    const numericValues = values.filter(val => !isNaN(parseFloat(String(val))) && isFinite(Number(val)));
+    const dateValues = values.filter(val => !isNaN(Date.parse(String(val))));
+    
+    if (numericValues.length === values.length) {
+      dataTypes[col] = 'numeric';
+    } else if (dateValues.length > values.length * 0.8) {
+      dataTypes[col] = 'date';
+    } else {
+      dataTypes[col] = 'text';
+    }
+
+    // Check for inconsistent data types
+    if (numericValues.length > 0 && numericValues.length < values.length * 0.9) {
+      validationErrors.push(`Column '${col}' has mixed data types (${numericValues.length}/${values.length} numeric)`);
+    }
+  });
+
+  const insights = [
+    `Validated ${columns.length} columns`,
+    `Found ${validationErrors.length} validation issues`,
+    `Data types detected: ${Object.entries(dataTypes).map(([col, type]) => `${col}(${type})`).join(', ')}`
+  ];
+
+  return {
+    processedData: data,
+    analysis: {
+      reasoning: `Performed data validation on ${data.length} rows and ${columns.length} columns`,
+      insights,
+      validationErrors,
+      dataTypes
+    }
+  };
+}
+
+function analyzeCorrelationsLocal(data: DataRow[]): ProcessingResult {
+  if (!data.length) {
+    return {
+      processedData: data,
+      analysis: {
+        reasoning: "No data to analyze correlations",
+        insights: ["Dataset is empty"],
+        correlations: {},
+        strongRelationships: []
+      }
+    };
+  }
+
+  const columns = Object.keys(data[0]);
+  const numericColumns = columns.filter(col => {
+    const values = data.map(row => row[col]).filter(val => val != null && val !== '');
+    return values.every(val => !isNaN(parseFloat(String(val))) && isFinite(Number(val)));
+  });
+
+  const correlations: Record<string, number> = {};
+  const strongRelationships: string[] = [];
+
+  // Calculate simple correlations for numeric columns
+  for (let i = 0; i < numericColumns.length; i++) {
+    for (let j = i + 1; j < numericColumns.length; j++) {
+      const col1 = numericColumns[i];
+      const col2 = numericColumns[j];
+      
+      const values1 = data.map(row => parseFloat(String(row[col1]))).filter(val => !isNaN(val));
+      const values2 = data.map(row => parseFloat(String(row[col2]))).filter(val => !isNaN(val));
+      
+      if (values1.length > 1 && values2.length > 1) {
+        // Simple correlation calculation
+        const mean1 = values1.reduce((sum, val) => sum + val, 0) / values1.length;
+        const mean2 = values2.reduce((sum, val) => sum + val, 0) / values2.length;
+        
+        const numerator = values1.reduce((sum, val, idx) => sum + (val - mean1) * (values2[idx] - mean2), 0);
+        const denominator1 = Math.sqrt(values1.reduce((sum, val) => sum + Math.pow(val - mean1, 2), 0));
+        const denominator2 = Math.sqrt(values2.reduce((sum, val) => sum + Math.pow(val - mean2, 2), 0));
+        
+        if (denominator1 > 0 && denominator2 > 0) {
+          const correlation = numerator / (denominator1 * denominator2);
+          correlations[`${col1}-${col2}`] = Math.round(correlation * 1000) / 1000;
+          
+          if (Math.abs(correlation) > 0.7) {
+            strongRelationships.push(`${col1} and ${col2} (${correlation.toFixed(3)})`);
+          }
+        }
+      }
+    }
+  }
+
+  const insights = [
+    `Analyzed correlations between ${numericColumns.length} numeric columns`,
+    `Found ${Object.keys(correlations).length} correlation pairs`,
+    `Identified ${strongRelationships.length} strong relationships (|r| > 0.7)`
+  ];
+
+  return {
+    processedData: data,
+    analysis: {
+      reasoning: `Calculated correlations between numeric columns using Pearson correlation coefficient`,
+      insights,
+      correlations,
+      strongRelationships
+    }
+  };
+}
+
+function analyzeTrendsLocal(data: DataRow[]): ProcessingResult {
+  if (!data.length) {
+    return {
+      processedData: data,
+      analysis: {
+        reasoning: "No data to analyze trends",
+        insights: ["Dataset is empty"],
+        trends: [],
+        patterns: {}
+      }
+    };
+  }
+
+  const columns = Object.keys(data[0]);
+  const dateColumns = columns.filter(col => {
+    const values = data.map(row => row[col]).filter(val => val != null && val !== '');
+    return values.some(val => !isNaN(Date.parse(String(val))));
+  });
+
+  const numericColumns = columns.filter(col => {
+    const values = data.map(row => row[col]).filter(val => val != null && val !== '');
+    return values.every(val => !isNaN(parseFloat(String(val))) && isFinite(Number(val)));
+  });
+
+  const trends: string[] = [];
+  const patterns: Record<string, unknown> = {};
+
+  if (dateColumns.length === 0) {
+    // No date columns, try to find trends in sequential data
+    numericColumns.forEach(col => {
+      const values = data.map(row => parseFloat(String(row[col]))).filter(val => !isNaN(val));
+      if (values.length > 2) {
+        const firstHalf = values.slice(0, Math.floor(values.length / 2));
+        const secondHalf = values.slice(Math.floor(values.length / 2));
+        
+        const firstAvg = firstHalf.reduce((sum, val) => sum + val, 0) / firstHalf.length;
+        const secondAvg = secondHalf.reduce((sum, val) => sum + val, 0) / secondHalf.length;
+        
+        const change = ((secondAvg - firstAvg) / firstAvg * 100);
+        if (Math.abs(change) > 10) {
+          trends.push(`${col} shows ${change > 0 ? 'increasing' : 'decreasing'} trend (${change.toFixed(1)}% change)`);
+        }
+      }
+    });
+  }
+
+  // Basic seasonality detection (if we have enough data points)
+  if (data.length >= 12) {
+    patterns.dataPoints = data.length;
+    patterns.potentialSeasonality = "Dataset has enough points for seasonal analysis";
+  }
+
+  const insights = [
+    `Analyzed ${numericColumns.length} numeric columns for trends`,
+    `Found ${dateColumns.length} date columns`,
+    `Identified ${trends.length} potential trends`,
+    data.length >= 12 ? "Dataset suitable for seasonal analysis" : "Dataset too small for reliable trend analysis"
+  ];
+
+  return {
+    processedData: data,
+    analysis: {
+      reasoning: `Performed basic trend analysis on ${data.length} data points`,
+      insights,
+      trends,
+      patterns
+    }
   };
 }
