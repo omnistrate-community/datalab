@@ -8,6 +8,17 @@ x-omnistrate-service-plan:
       AwsAccountId: '541226919566'
       AwsBootstrapRoleAccountArn: 'arn:aws:iam::541226919566:role/omnistrate-bootstrap-role'
 
+# Exports to cloud-provider specific monitoring and logging services
+x-internal-integrations:
+  metrics:
+    provider: native
+  logs:
+    provider: native
+
+x-customer-integrations:
+  metrics:
+  logs:
+
 services:
   datalab:
     build:
