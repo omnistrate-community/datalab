@@ -14,7 +14,7 @@ const anthropic: Anthropic | null = null;
 
 // vLLM configuration
 const VLLM_ENDPOINT_URL = process.env.VLLM_ENDPOINT_URL;
-const VLLM_MODEL_NAME = process.env.VLLM_MODEL_NAME || 'microsoft/Phi-3-mini-4k-instruct';
+const VLLM_MODEL_NAME = process.env.VLLM_MODEL_NAME || 'meta-llama/Llama-3.1-8B-Instruct';
 
 export async function POST(request: NextRequest) {
   let prompt = '';

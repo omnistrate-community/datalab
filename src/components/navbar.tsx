@@ -6,7 +6,6 @@ import Link from "next/link"
 import Image from "next/image"
 import { 
   User, 
-  Settings, 
   LogOut, 
   Building2, 
   ChevronDown,
@@ -133,7 +132,7 @@ export function Navbar({ className = "" }: NavbarProps) {
                     {userProfile.preferredLLMProvider === 'VLLM' && 'vLLM'}
                     {userProfile.preferredLLMProvider === 'LOCAL' && 'Local'}
                   </span>
-                  {userProfile.preferredModelName && (
+                  {userProfile.preferredLLMProvider !== 'VLLM' && userProfile.preferredModelName && (
                     <span className="text-xs text-gray-500">
                       {userProfile.preferredModelName}
                     </span>
@@ -185,15 +184,6 @@ export function Navbar({ className = "" }: NavbarProps) {
                     >
                       <User className="w-4 h-4 mr-2" />
                       Profile
-                    </Link>
-                    
-                    <Link
-                      href="/settings"
-                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                      onClick={() => setIsProfileOpen(false)}
-                    >
-                      <Settings className="w-4 h-4 mr-2" />
-                      Settings
                     </Link>
                     
                     <button

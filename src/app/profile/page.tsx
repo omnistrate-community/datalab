@@ -44,7 +44,7 @@ export default function ProfilePage() {
     preferredLLMProvider: "ANTHROPIC",
     preferredModelName: "claude-opus-4-20250514",
     vllmEndpointUrl: "",
-    vllmModelName: "",
+    vllmModelName: "meta-llama/Llama-3.1-8B-Instruct",
     emailNotifications: true,
     agentNotifications: true,
   })
@@ -314,11 +314,7 @@ export default function ProfilePage() {
                         className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                       >
                         <option value="">Select a model...</option>
-                        <option value="microsoft/Phi-3-mini-4k-instruct">Phi-3 Mini (3.8B - Fast)</option>
-                        <option value="microsoft/Phi-3-small-8k-instruct">Phi-3 Small (7B - Better)</option>
-                        <option value="meta-llama/Meta-Llama-3.1-8B-Instruct">Llama 3.1 8B (Most Capable)</option>
-                        <option value="mistralai/Mistral-7B-Instruct-v0.3">Mistral 7B (Multilingual)</option>
-                        <option value="TinyLlama/TinyLlama-1.1B-Chat-v1.0">TinyLlama (1.1B - Very Fast)</option>
+                        <option value="meta-llama/Llama-3.1-8B-Instruct">Llama 3.1 8B (Most Capable)</option>
                       </select>
                       <input
                         type="text"
