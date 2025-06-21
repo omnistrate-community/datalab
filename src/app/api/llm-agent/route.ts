@@ -16,6 +16,10 @@ const anthropic: Anthropic | null = null;
 const VLLM_ENDPOINT_URL = process.env.VLLM_ENDPOINT_URL;
 const VLLM_MODEL_NAME = process.env.VLLM_MODEL_NAME || 'meta-llama/Llama-3.1-8B-Instruct';
 
+// Environment variable controls
+const DISABLE_VLLM = process.env.DISABLE_VLLM === 'true';
+const STATIC_VLLM_ENDPOINT = process.env.STATIC_VLLM_ENDPOINT;
+
 export async function POST(request: NextRequest) {
   let prompt = '';
   let data: DataRow[] = [];
@@ -70,6 +74,17 @@ export async function POST(request: NextRequest) {
       } catch (error) {
         console.warn('Failed to fetch user preferences, using defaults:', error);
       }
+    }
+
+    // Apply environment variable overrides
+    if (DISABLE_VLLM && userPreferredProvider === 'VLLM') {
+      console.log('vLLM disabled by environment variable, falling back to Claude');
+      userPreferredProvider = 'ANTHROPIC';
+    }
+    
+    if (STATIC_VLLM_ENDPOINT) {
+      userVllmEndpoint = STATIC_VLLM_ENDPOINT;
+      console.log(`Using static vLLM endpoint: ${STATIC_VLLM_ENDPOINT}`);
     }
 
     // Determine which provider to use based on user preference and availability

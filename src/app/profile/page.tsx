@@ -33,6 +33,11 @@ export default function ProfilePage() {
   const [isSaving, setIsSaving] = useState(false)
   const [message, setMessage] = useState("")
   const [isError, setIsError] = useState(false)
+  const [envConfig, setEnvConfig] = useState<{
+    disableVllm: boolean
+    staticVllmEndpoint: string | null
+    vllmModelName: string
+  } | null>(null)
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -51,7 +56,8 @@ export default function ProfilePage() {
 
   useEffect(() => {
     fetchProfile()
-  }, [])
+    fetchEnvConfig()
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const fetchProfile = async () => {
     try {
@@ -87,6 +93,32 @@ export default function ProfilePage() {
       console.error("Failed to fetch profile:", error)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const fetchEnvConfig = async () => {
+    try {
+      const response = await fetch("/api/config")
+      if (response.ok) {
+        const config = await response.json()
+        setEnvConfig(config)
+        
+        // If vLLM is disabled, force provider to ANTHROPIC
+        if (config.disableVllm && formData.preferredLLMProvider === 'VLLM') {
+          setFormData(prev => ({ ...prev, preferredLLMProvider: 'ANTHROPIC' }))
+        }
+        
+        // If static vLLM endpoint is configured, update the endpoint
+        if (config.staticVllMEndpoint) {
+          setFormData(prev => ({ 
+            ...prev, 
+            vllmEndpointUrl: config.staticVllMEndpoint,
+            vllmModelName: config.vllmModelName 
+          }))
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch environment config:", error)
     }
   }
 
@@ -263,7 +295,9 @@ export default function ProfilePage() {
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                   >
                     <option value="ANTHROPIC">Anthropic Claude</option>
-                    <option value="VLLM">vLLM (Local AI Server)</option>
+                    {!envConfig?.disableVllm && (
+                      <option value="VLLM">vLLM (Local AI Server)</option>
+                    )}
                     <option value="OPENAI">OpenAI GPT</option>
                     <option value="LOCAL">Local Processing</option>
                   </select>
@@ -296,42 +330,68 @@ export default function ProfilePage() {
 
                 {formData.preferredLLMProvider === 'VLLM' && (
                   <div className="space-y-3">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">vLLM Endpoint URL</label>
-                      <input
-                        type="url"
-                        value={formData.vllmEndpointUrl}
-                        onChange={(e) => setFormData({ ...formData, vllmEndpointUrl: e.target.value })}
-                        placeholder="http://localhost:8000"
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Model Name</label>
-                      <select
-                        value={formData.vllmModelName}
-                        onChange={(e) => setFormData({ ...formData, vllmModelName: e.target.value })}
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                      >
-                        <option value="">Select a model...</option>
-                        <option value="meta-llama/Llama-3.1-8B-Instruct">Llama 3.1 8B (Most Capable)</option>
-                      </select>
-                      <input
-                        type="text"
-                        value={formData.vllmModelName}
-                        onChange={(e) => setFormData({ ...formData, vllmModelName: e.target.value })}
-                        placeholder="Or enter custom model name"
-                        className="mt-2 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                      />
-                    </div>
-                    <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
-                      <p className="text-sm text-blue-800 dark:text-blue-200">
-                        <strong>vLLM Setup:</strong> Make sure your vLLM server is running at the specified endpoint. 
-                        <a href="https://docs.vllm.ai/en/latest/" target="_blank" rel="noopener noreferrer" className="underline ml-1">
-                          View vLLM documentation
-                        </a>
-                      </p>
-                    </div>
+                    {envConfig?.staticVllmEndpoint ? (
+                      // Static vLLM endpoint configured - show read-only info
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">vLLM Endpoint URL</label>
+                          <div className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-300">
+                            {envConfig.staticVllmEndpoint} (Configured by administrator)
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Model Name</label>
+                          <div className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-100 dark:bg-gray-600 text-gray-700 dark:text-gray-300">
+                            {envConfig.vllmModelName} (Configured by administrator)
+                          </div>
+                        </div>
+                        <div className="mt-2 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md">
+                          <p className="text-sm text-green-800 dark:text-green-200">
+                            <strong>vLLM Configured:</strong> Your administrator has configured a vLLM endpoint. No additional setup required.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      // User-configurable vLLM settings
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">vLLM Endpoint URL</label>
+                          <input
+                            type="url"
+                            value={formData.vllmEndpointUrl}
+                            onChange={(e) => setFormData({ ...formData, vllmEndpointUrl: e.target.value })}
+                            placeholder="http://localhost:8000"
+                            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Model Name</label>
+                          <select
+                            value={formData.vllmModelName}
+                            onChange={(e) => setFormData({ ...formData, vllmModelName: e.target.value })}
+                            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                          >
+                            <option value="">Select a model...</option>
+                            <option value="meta-llama/Llama-3.1-8B-Instruct">Llama 3.1 8B (Most Capable)</option>
+                          </select>
+                          <input
+                            type="text"
+                            value={formData.vllmModelName}
+                            onChange={(e) => setFormData({ ...formData, vllmModelName: e.target.value })}
+                            placeholder="Or enter custom model name"
+                            className="mt-2 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                          />
+                        </div>
+                        <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                          <p className="text-sm text-blue-800 dark:text-blue-200">
+                            <strong>vLLM Setup:</strong> Make sure your vLLM server is running at the specified endpoint. 
+                            <a href="https://docs.vllm.ai/en/latest/" target="_blank" rel="noopener noreferrer" className="underline ml-1">
+                              View vLLM documentation
+                            </a>
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

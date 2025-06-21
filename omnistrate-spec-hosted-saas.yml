@@ -1,0 +1,69 @@
+version: '3.8'
+
+x-omnistrate-service-plan:
+  name: 'DataLab AI Data Processing Platform - SaaS'
+  tenancyType: 'OMNISTRATE_DEDICATED_TENANCY'
+  deployment:
+    hostedDeployment:
+      AwsAccountId: '541226919566'
+      AwsBootstrapRoleAccountArn: 'arn:aws:iam::541226919566:role/omnistrate-bootstrap-role'
+
+services:
+  datalab:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    privileged: true
+    x-omnistrate-capabilities:
+      customDNS:
+        targetPort: 3000
+      httpReverseProxy:
+        targetPort: 3000
+    x-omnistrate-compute:
+      rootVolumeSizeGi: 50
+      instanceTypes:
+        - name: t4g.medium
+          cloudProvider: aws
+        - name: e2-medium
+          cloudProvider: gcp
+    environment:
+      - NODE_ENV=production
+      - NEXT_TELEMETRY_DISABLED=1
+      - DATABASE_URL=file:/app/data/prisma/dev.db
+      - NEXTAUTH_URL={{ $sys.network.externalClusterEndpoint }}
+      - NEXTAUTH_SECRET={{ $func.random(string, 32) }}
+      - ANTHROPIC_API_KEY={{ $var.anthropicApiKey }}
+      - GOOGLE_CLIENT_ID=client-id
+      - GOOGLE_CLIENT_SECRET=client-secret
+      - DISABLE_VLLM=true
+    volumes:
+      - datalab_data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "com.datalab.description=DataLab AI Data Processing Platform"
+      - "com.datalab.version=1.0"
+    x-omnistrate-api-params:
+      - key: anthropicApiKey
+        description: Anthropic API key
+        name: Anthropic API key
+        type: Password
+        export: true
+        required: true
+        modifiable: true
+
+volumes:
+  datalab_data:
+    driver: local
+x-omnistrate-image-registry-attributes:
+  ghcr.io:
+    auth:
+      password: ${{ secrets.GitHubPAT }}
+      username: aloknikhil

@@ -1,0 +1,131 @@
+version: '3.8'
+
+x-omnistrate-service-plan:
+  name: 'DataLab AI Data Processing Platform - Fully Managed - Isolated Network Tenancy'
+  tenancyType: 'OMNISTRATE_DEDICATED_TENANCY'
+  features:
+    CUSTOM_NETWORKS:
+  deployment:
+    hostedDeployment:
+      AwsAccountId: '541226919566'
+      AwsBootstrapRoleAccountArn: 'arn:aws:iam::541226919566:role/omnistrate-bootstrap-role'
+
+services:
+  datalab:
+    depends_on:
+      - vllm-openai
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    privileged: true
+    x-omnistrate-capabilities:
+      httpReverseProxy:
+        targetPort: 3000
+    x-omnistrate-compute:
+      rootVolumeSizeGi: 50
+      instanceTypes:
+        - name: t4g.medium
+          cloudProvider: aws
+        - name: e2-medium
+          cloudProvider: gcp
+    environment:
+      - NODE_ENV=production
+      - NEXT_TELEMETRY_DISABLED=1
+      - DATABASE_URL=file:/app/data/prisma/dev.db
+      - NEXTAUTH_URL={{ $sys.network.externalClusterEndpoint }}
+      - NEXTAUTH_SECRET={{ $func.random(string, 32) }}
+      - ANTHROPIC_API_KEY={{ $var.anthropicApiKey }}
+      - GOOGLE_CLIENT_ID=client-id
+      - GOOGLE_CLIENT_SECRET=client-secret
+    volumes:
+      - datalab_data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      - "com.datalab.description=DataLab AI Data Processing Platform"
+      - "com.datalab.version=1.0"
+    x-omnistrate-api-params:
+      - key: hfToken
+        description: Hugging Face API token
+        name: Hugging Face API token
+        type: Password
+        export: true
+        required: true
+        modifiable: true
+        parameterDependencyMap:
+          vllm-openai: hfToken
+      - key: anthropicApiKey
+        description: Anthropic API key
+        name: Anthropic API key
+        type: Password
+        export: true
+        required: true
+        modifiable: true
+
+  vllm-openai:
+    x-omnistrate-mode-internal: true
+    x-omnistrate-compute:
+      rootVolumeSizeGi: 100
+      instanceTypes:
+        - name: g6e.xlarge
+          cloudProvider: aws
+    image: vllm/vllm-openai:v0.9.1
+    privileged: true
+    volumes:
+      - source: cache
+        target: /.cache/huggingface
+        type: volume
+        x-omnistrate-storage:
+          aws:
+            instanceStorageType: AWS::EBS_GP3
+            instanceStorageSizeGiAPIParam: instanceStorageSizeGi
+            instanceStorageIOPS: 3000
+            instanceStorageThroughputMiBps: 500
+          gcp:
+            instanceStorageType: GCP::PD_BALANCED
+            instanceStorageSizeGiAPIParam: instanceStorageSizeGi
+    environment:
+      - HUGGING_FACE_HUB_TOKEN={{ $var.hfToken }}
+      - VLLM_HOST_IP=0.0.0.0
+      - VLLM_LOGGING_LEVEL=DEBUG
+      - VLLM_DISABLE_COMPILE_CACHE=1
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+    - vllm serve meta-llama/Llama-3.1-8B-Instruct --trust-remote-code --enable-chunked-prefill --max_num_batched_tokens 1024 --max-model-len 32768
+    x-omnistrate-api-params:
+    - key: hfToken
+      description: Hugging Face API token
+      name: Hugging Face API token
+      type: Password
+      export: true
+      required: true
+      modifiable: true
+    - key: instanceStorageSizeGi
+      description: The size of the instance storage volume in GiB
+      name: Instance Storage Size
+      type: Float64
+      modifiable: true
+      required: false
+      export: true
+      defaultValue: "250"
+      limits:
+        min: 30
+        max: 1000
+
+volumes:
+  datalab_data:
+    driver: local
+  cache:
+    driver: local
+x-omnistrate-image-registry-attributes:
+  ghcr.io:
+    auth:
+      password: ${{ secrets.GitHubPAT }}
+      username: aloknikhil
