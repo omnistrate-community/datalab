@@ -81,3 +81,5 @@ ENV HOSTNAME "0.0.0.0"
 
 # Create startup script to handle database initialization
 CMD ["sh", "-c", "npx prisma db push && node server.js"]
+
+LABEL org.opencontainers.image.source="https://github.com/omnistrate-community/datalab"
