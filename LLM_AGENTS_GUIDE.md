@@ -8,12 +8,12 @@ DataLab now features **real AI-powered agents** that use Anthropic's Claude mode
 
 ### 🤖 Real LLM Mode (When Anthropic API Key is Configured)
 
-When you provide an Anthropic API key, agents leverage **Claude-3-Haiku** for intelligent data processing:
+When you provide an Anthropic API key, agents leverage **Claude-4 Opus / Sonnet** for intelligent data processing:
 
 #### 1. **Remove Duplicates Agent**
 - **What it does**: Analyzes your dataset using semantic understanding to identify duplicate records
 - **LLM Processing**: 
-  - Sends data sample and schema to Claude-3-Haiku
+  - Sends data sample and schema
   - Asks the LLM to identify duplicate rows based on semantic similarity, not just exact matches
   - LLM provides reasoning for why records are considered duplicates
   - Returns indices of rows to remove with detailed analysis
@@ -91,15 +91,12 @@ When no OpenAI API key is configured, agents use intelligent local algorithms:
 
 ### Cost Considerations
 
-- Uses **Claude-3-Haiku** model for cost efficiency and speed
 - Only sends data samples (first 5 rows) to avoid token limits
 - Low temperature (0.1) for consistent analysis
-- Typical cost: ~$0.0002-0.002 per agent execution (very cost-effective)
 
 ## Technical Implementation
 
 ### API Integration
-- **Model**: claude-3-haiku-20240307 (fast, cost-effective, capable)
 - **Safety**: Automatic fallback to local processing if API fails
 - **Security**: API keys stored locally, never committed to version control
 - **Performance**: Optimized prompts for fast, accurate responses

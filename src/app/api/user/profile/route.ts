@@ -12,9 +12,12 @@ const updateProfileSchema = z.object({
   timezone: z.string().optional(),
   theme: z.enum(["LIGHT", "DARK", "SYSTEM"]).optional(),
   language: z.string().optional(),
-  preferredLLMProvider: z.enum(["ANTHROPIC", "OPENAI", "LOCAL"]).optional(),
+  preferredLLMProvider: z.enum(["ANTHROPIC", "OPENAI", "VLLM", "LOCAL"]).optional(),
+  preferredModelName: z.string().optional(),
   anthropicApiKey: z.string().optional(),
   openaiApiKey: z.string().optional(),
+  vllmEndpointUrl: z.string().optional(),
+  vllmModelName: z.string().optional(),
   emailNotifications: z.boolean().optional(),
   agentNotifications: z.boolean().optional(),
 })
@@ -48,16 +51,20 @@ export async function GET() {
     // Remove sensitive data
     const { profile, organization, ...userData } = user
     if (profile) {
-      const { hashedPassword, anthropicApiKey, openaiApiKey, ...profileData } = profile
+      const { hashedPassword, anthropicApiKey, openaiApiKey, vllmEndpointUrl, vllmModelName, ...profileData } = profile
       // Remove unused variables warning
       void hashedPassword
       return NextResponse.json({
         user: userData,
         profile: {
           ...profileData,
+          // Include vLLM configuration in response (not sensitive)
+          vllmEndpointUrl,
+          vllmModelName,
           hasApiKeys: {
             anthropic: !!anthropicApiKey,
             openai: !!openaiApiKey,
+            vllm: !!vllmEndpointUrl,
           },
         },
         organization,
@@ -92,6 +99,22 @@ export async function PUT(request: NextRequest) {
     const body = await request.json()
     const data = updateProfileSchema.parse(body)
 
+    // First, verify the user exists in the database
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+    })
+
+    if (!user) {
+      return NextResponse.json(
+        { 
+          error: "User session is invalid. Please sign out and sign back in.", 
+          code: "USER_NOT_FOUND",
+          action: "REAUTHENTICATE"
+        },
+        { status: 401 }
+      )
+    }
+
     // Get or create user profile
     const existingProfile = await prisma.userProfile.findUnique({
       where: { userId: session.user.id },
@@ -113,13 +136,15 @@ export async function PUT(request: NextRequest) {
     }
 
     // Remove sensitive data from response
-    const { hashedPassword, anthropicApiKey, openaiApiKey, ...profileData } = profile
+    const { hashedPassword, anthropicApiKey, openaiApiKey, vllmEndpointUrl, ...profileData } = profile
     // Remove unused variables warning  
     void hashedPassword
 
     return NextResponse.json({
       profile: {
         ...profileData,
+        // Include vLLM endpoint URL in response (not sensitive)
+        vllmEndpointUrl,
         hasApiKeys: {
           anthropic: !!anthropicApiKey,
           openai: !!openaiApiKey,
@@ -134,6 +159,22 @@ export async function PUT(request: NextRequest) {
         { error: "Invalid input", details: error.errors },
         { status: 400 }
       )
+    }
+
+    // Handle Prisma foreign key constraint violations
+    if (error instanceof Error) {
+      console.error("Error details:", {
+        name: error.name,
+        message: error.message,
+        code: (error as { code?: string }).code
+      })
+      
+      if ((error as { code?: string }).code === 'P2003') {
+        return NextResponse.json(
+          { error: "User reference not found. Please try logging out and back in." },
+          { status: 400 }
+        )
+      }
     }
 
     return NextResponse.json(

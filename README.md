@@ -136,7 +136,7 @@ When configured with a vLLM endpoint, agents use your local AI server for:
 - Cost-effective processing for large datasets
 
 ### 🤖 Claude Mode (Cloud AI)
-When configured with an Anthropic API key, agents use Claude-3-Haiku for:
+When configured with an Anthropic API key:
 - Intelligent duplicate detection based on semantic similarity
 - Smart missing value imputation strategies
 - Context-aware text normalization

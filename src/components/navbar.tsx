@@ -20,9 +20,13 @@ interface UserProfile {
   title?: string
   company?: string
   preferredLLMProvider: string
+  preferredModelName?: string
+  vllmEndpointUrl?: string
+  vllmModelName?: string
   hasApiKeys: {
     anthropic: boolean
     openai: boolean
+    vllm: boolean
   }
 }
 
@@ -116,15 +120,30 @@ export function Navbar({ className = "" }: NavbarProps) {
 
             {/* LLM Provider Status */}
             {userProfile && (
-              <div className="hidden sm:flex items-center space-x-1">
+              <div className="hidden sm:flex items-center space-x-2 px-3 py-1 bg-gray-50 rounded-lg">
                 <Zap className={`h-4 w-4 ${
-                  userProfile.hasApiKeys.anthropic || userProfile.hasApiKeys.openai 
+                  userProfile.hasApiKeys.anthropic || userProfile.hasApiKeys.openai || userProfile.hasApiKeys.vllm
                     ? 'text-green-500' 
                     : 'text-yellow-500'
                 }`} />
-                <span className="text-xs text-gray-500">
-                  {userProfile.preferredLLMProvider}
-                </span>
+                <div className="flex flex-col">
+                  <span className="text-xs font-medium text-gray-700">
+                    {userProfile.preferredLLMProvider === 'ANTHROPIC' && 'Claude'}
+                    {userProfile.preferredLLMProvider === 'OPENAI' && 'OpenAI'}
+                    {userProfile.preferredLLMProvider === 'VLLM' && 'vLLM'}
+                    {userProfile.preferredLLMProvider === 'LOCAL' && 'Local'}
+                  </span>
+                  {userProfile.preferredModelName && (
+                    <span className="text-xs text-gray-500">
+                      {userProfile.preferredModelName}
+                    </span>
+                  )}
+                  {userProfile.preferredLLMProvider === 'VLLM' && userProfile.vllmModelName && (
+                    <span className="text-xs text-gray-500">
+                      {userProfile.vllmModelName}
+                    </span>
+                  )}
+                </div>
               </div>
             )}
 

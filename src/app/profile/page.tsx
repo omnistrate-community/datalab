@@ -14,6 +14,9 @@ interface UserProfile {
   theme: string
   language: string
   preferredLLMProvider: string
+  preferredModelName?: string
+  vllmEndpointUrl?: string
+  vllmModelName?: string
   hasApiKeys: {
     anthropic: boolean
     openai: boolean
@@ -29,6 +32,7 @@ export default function ProfilePage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [message, setMessage] = useState("")
+  const [isError, setIsError] = useState(false)
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -38,6 +42,9 @@ export default function ProfilePage() {
     theme: "SYSTEM",
     language: "en",
     preferredLLMProvider: "ANTHROPIC",
+    preferredModelName: "claude-opus-4-20250514",
+    vllmEndpointUrl: "",
+    vllmModelName: "",
     emailNotifications: true,
     agentNotifications: true,
   })
@@ -62,13 +69,22 @@ export default function ProfilePage() {
             theme: data.profile.theme,
             language: data.profile.language,
             preferredLLMProvider: data.profile.preferredLLMProvider,
+            preferredModelName: data.profile.preferredModelName || "claude-opus-4-20250514",
+            vllmEndpointUrl: data.profile.vllmEndpointUrl || "",
+            vllmModelName: data.profile.vllmModelName || "",
             emailNotifications: data.profile.emailNotifications,
             agentNotifications: data.profile.agentNotifications,
           })
         }
+      } else if (response.status === 401) {
+        const errorData = await response.json()
+        if (errorData.code === 'USER_NOT_FOUND') {
+          setMessage("Your session has expired. Please sign out and sign back in.")
+          setIsError(true)
+        }
       }
-    } catch {
-      console.error("Failed to fetch profile:")
+    } catch (error) {
+      console.error("Failed to fetch profile:", error)
     } finally {
       setIsLoading(false)
     }
@@ -92,12 +108,20 @@ export default function ProfilePage() {
         const data = await response.json()
         setProfile(data.profile)
         setMessage("Profile updated successfully!")
+        setIsError(false)
         setTimeout(() => setMessage(""), 3000)
       } else {
-        setMessage("Failed to update profile")
+        const errorData = await response.json()
+        if (errorData.code === 'USER_NOT_FOUND' && errorData.action === 'REAUTHENTICATE') {
+          setMessage("Your session has expired. Please sign out and sign back in.")
+        } else {
+          setMessage(errorData.error || "Failed to update profile")
+        }
+        setIsError(true)
       }
     } catch {
       setMessage("An error occurred")
+      setIsError(true)
     } finally {
       setIsSaving(false)
     }
@@ -123,8 +147,17 @@ export default function ProfilePage() {
         </div>
 
           {message && (
-            <div className="mx-6 mt-4 p-4 rounded-md bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-              <p className="text-green-800 dark:text-green-200">{message}</p>
+            <div className={`mx-6 mt-4 p-4 rounded-md border ${
+              isError 
+                ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800' 
+                : 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+            }`}>
+              <p className={isError 
+                ? 'text-red-800 dark:text-red-200' 
+                : 'text-green-800 dark:text-green-200'
+              }>
+                {message}
+              </p>
             </div>
           )}
 
@@ -221,25 +254,103 @@ export default function ProfilePage() {
                 <Key className="h-5 w-5 text-gray-400 dark:text-gray-500" />
                 <h2 className="text-lg font-medium text-gray-900 dark:text-white">AI Configuration</h2>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Preferred LLM Provider</label>
-                <select
-                  value={formData.preferredLLMProvider}
-                  onChange={(e) => setFormData({ ...formData, preferredLLMProvider: e.target.value })}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                >
-                  <option value="ANTHROPIC">Anthropic Claude</option>
-                  <option value="OPENAI">OpenAI GPT</option>
-                  <option value="LOCAL">Local Processing</option>
-                </select>
-                {profile && (
-                  <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                    API Keys configured: 
-                    {profile.hasApiKeys.anthropic && <span className="ml-1 text-green-600 dark:text-green-400">Anthropic</span>}
-                    {profile.hasApiKeys.openai && <span className="ml-1 text-green-600 dark:text-green-400">OpenAI</span>}
-                    {!profile.hasApiKeys.anthropic && !profile.hasApiKeys.openai && (
-                      <span className="ml-1 text-yellow-600 dark:text-yellow-400">None (using local processing)</span>
-                    )}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Preferred LLM Provider</label>
+                  <select
+                    value={formData.preferredLLMProvider}
+                    onChange={(e) => setFormData({ ...formData, preferredLLMProvider: e.target.value })}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                  >
+                    <option value="ANTHROPIC">Anthropic Claude</option>
+                    <option value="VLLM">vLLM (Local AI Server)</option>
+                    <option value="OPENAI">OpenAI GPT</option>
+                    <option value="LOCAL">Local Processing</option>
+                  </select>
+                  {profile && (
+                    <div className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                      API Keys configured: 
+                      {profile.hasApiKeys.anthropic && <span className="ml-1 text-green-600 dark:text-green-400">Anthropic</span>}
+                      {profile.hasApiKeys.openai && <span className="ml-1 text-green-600 dark:text-green-400">OpenAI</span>}
+                      {!profile.hasApiKeys.anthropic && !profile.hasApiKeys.openai && (
+                        <span className="ml-1 text-yellow-600 dark:text-yellow-400">None (using local processing)</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Model Configuration based on selected provider */}
+                {formData.preferredLLMProvider === 'ANTHROPIC' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Claude Model</label>
+                    <select
+                      value={formData.preferredModelName}
+                      onChange={(e) => setFormData({ ...formData, preferredModelName: e.target.value })}
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                      <option value="claude-opus-4-20250514">Claude 4 Opus (Most Capable)</option>
+                      <option value="claude-sonnet-4-20250514">Claude 4 Sonnet (Balanced)</option>
+                    </select>
+                  </div>
+                )}
+
+                {formData.preferredLLMProvider === 'VLLM' && (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">vLLM Endpoint URL</label>
+                      <input
+                        type="url"
+                        value={formData.vllmEndpointUrl}
+                        onChange={(e) => setFormData({ ...formData, vllmEndpointUrl: e.target.value })}
+                        placeholder="http://localhost:8000"
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Model Name</label>
+                      <select
+                        value={formData.vllmModelName}
+                        onChange={(e) => setFormData({ ...formData, vllmModelName: e.target.value })}
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                      >
+                        <option value="">Select a model...</option>
+                        <option value="microsoft/Phi-3-mini-4k-instruct">Phi-3 Mini (3.8B - Fast)</option>
+                        <option value="microsoft/Phi-3-small-8k-instruct">Phi-3 Small (7B - Better)</option>
+                        <option value="meta-llama/Meta-Llama-3.1-8B-Instruct">Llama 3.1 8B (Most Capable)</option>
+                        <option value="mistralai/Mistral-7B-Instruct-v0.3">Mistral 7B (Multilingual)</option>
+                        <option value="TinyLlama/TinyLlama-1.1B-Chat-v1.0">TinyLlama (1.1B - Very Fast)</option>
+                      </select>
+                      <input
+                        type="text"
+                        value={formData.vllmModelName}
+                        onChange={(e) => setFormData({ ...formData, vllmModelName: e.target.value })}
+                        placeholder="Or enter custom model name"
+                        className="mt-2 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                      />
+                    </div>
+                    <div className="mt-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                      <p className="text-sm text-blue-800 dark:text-blue-200">
+                        <strong>vLLM Setup:</strong> Make sure your vLLM server is running at the specified endpoint. 
+                        <a href="https://docs.vllm.ai/en/latest/" target="_blank" rel="noopener noreferrer" className="underline ml-1">
+                          View vLLM documentation
+                        </a>
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {formData.preferredLLMProvider === 'OPENAI' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">OpenAI Model</label>
+                    <select
+                      value={formData.preferredModelName}
+                      onChange={(e) => setFormData({ ...formData, preferredModelName: e.target.value })}
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    >
+                      <option value="gpt-3.5-turbo">GPT-3.5 Turbo (Fast & Cost-effective)</option>
+                      <option value="gpt-4">GPT-4 (Most Capable)</option>
+                      <option value="gpt-4-turbo">GPT-4 Turbo (Balanced)</option>
+                    </select>
                   </div>
                 )}
               </div>

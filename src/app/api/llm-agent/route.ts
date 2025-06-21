@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { 
   DataRow, 
   ProcessingResult
@@ -32,24 +35,86 @@ export async function POST(request: NextRequest) {
     chatHistory = body.chatHistory || [];
     columns = body.columns || [];
 
-    // Priority: vLLM > Claude > Local processing
-    if (VLLM_ENDPOINT_URL && VLLM_ENDPOINT_URL.trim() !== '') {
-      console.log('Using vLLM endpoint for data processing');
-      const response = await processWithVLLM(prompt, data, agentType, userMessage, hasData, chatHistory, columns);
-      return NextResponse.json({ success: true, result: response, provider: 'vLLM' });
+    // Get user's preferred LLM provider
+    const session = await getServerSession(authOptions);
+    let userPreferredProvider = 'ANTHROPIC'; // Default fallback
+    let userVllmEndpoint = VLLM_ENDPOINT_URL;
+    let userVllmModel = VLLM_MODEL_NAME;
+    let userAnthropicKey = process.env.ANTHROPIC_API_KEY;
+    let userOpenaiKey = process.env.OPENAI_API_KEY;
+
+    if (session?.user?.id) {
+      try {
+        const user = await prisma.user.findUnique({
+          where: { id: session.user.id },
+          select: {
+            profile: {
+              select: {
+                preferredLLMProvider: true,
+                vllmEndpointUrl: true,
+                vllmModelName: true,
+                anthropicApiKey: true,
+                openaiApiKey: true,
+              }
+            }
+          }
+        });
+
+        if (user?.profile) {
+          userPreferredProvider = user.profile.preferredLLMProvider || 'ANTHROPIC';
+          userVllmEndpoint = user.profile.vllmEndpointUrl || VLLM_ENDPOINT_URL;
+          userVllmModel = user.profile.vllmModelName || VLLM_MODEL_NAME;
+          userAnthropicKey = user.profile.anthropicApiKey || process.env.ANTHROPIC_API_KEY;
+          userOpenaiKey = user.profile.openaiApiKey || process.env.OPENAI_API_KEY;
+        }
+      } catch (error) {
+        console.warn('Failed to fetch user preferences, using defaults:', error);
+      }
     }
 
-    // Check if Anthropic API key is configured
-    if (!process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY === 'your_anthropic_api_key_here') {
-      console.warn('Anthropic API key not configured, falling back to intelligent local processing');
-      const response = await processWithLocalLLM(prompt, data, agentType, userMessage, hasData, chatHistory);
-      return NextResponse.json({ success: true, result: response, provider: 'local' });
+    // Determine which provider to use based on user preference and availability
+    let providerToUse = userPreferredProvider;
+    
+    // Validate provider availability and fallback if needed
+    if (providerToUse === 'VLLM' && (!userVllmEndpoint || userVllmEndpoint.trim() === '')) {
+      console.log('vLLM selected but endpoint not configured, falling back to Claude');
+      providerToUse = 'ANTHROPIC';
+    }
+    
+    if (providerToUse === 'ANTHROPIC' && (!userAnthropicKey || userAnthropicKey === 'your_anthropic_api_key_here')) {
+      console.log('Claude selected but API key not configured, falling back to local');
+      providerToUse = 'LOCAL';
+    }
+    
+    if (providerToUse === 'OPENAI' && (!userOpenaiKey || userOpenaiKey === 'your_openai_api_key_here')) {
+      console.log('OpenAI selected but API key not configured, falling back to local');
+      providerToUse = 'LOCAL';
     }
 
-    // Use real Claude LLM for data processing
-    const response = await processWithClaude(prompt, data, agentType, userMessage, hasData, chatHistory, columns);
-
-    return NextResponse.json({ success: true, result: response, provider: 'claude' });
+    // Process with the selected/fallback provider
+    switch (providerToUse) {
+      case 'VLLM':
+        console.log(`Using vLLM endpoint for data processing: ${userVllmEndpoint}`);
+        const vllmResponse = await processWithVLLM(prompt, data, agentType, userMessage, hasData, chatHistory, columns, userVllmEndpoint, userVllmModel);
+        return NextResponse.json({ success: true, result: vllmResponse, provider: 'vLLM', model: userVllmModel });
+        
+      case 'ANTHROPIC':
+        console.log('Using Claude for data processing');
+        const claudeResponse = await processWithClaude(prompt, data, agentType, userMessage, hasData, chatHistory, columns, userAnthropicKey);
+        return NextResponse.json({ success: true, result: claudeResponse, provider: 'claude' });
+        
+      case 'OPENAI':
+        console.log('Using OpenAI for data processing');
+        // TODO: Implement OpenAI processing
+        const openaiResponse = await processWithLocalLLM(prompt, data, agentType, userMessage, hasData, chatHistory);
+        return NextResponse.json({ success: true, result: openaiResponse, provider: 'openai-fallback', note: 'OpenAI not yet implemented, using local processing' });
+        
+      case 'LOCAL':
+      default:
+        console.log('Using local processing');
+        const localResponse = await processWithLocalLLM(prompt, data, agentType, userMessage, hasData, chatHistory);
+        return NextResponse.json({ success: true, result: localResponse, provider: 'local' });
+    }
   } catch (error) {
     console.error('LLM API error:', error);
     // Fallback to local processing if Claude fails
@@ -80,7 +145,8 @@ async function processWithClaude(
   userMessage?: string, 
   hasData?: boolean,
   chatHistory?: Array<{id: string, type: string, content: string, timestamp: Date}>,
-  columns?: string[]
+  columns?: string[],
+  apiKey?: string
 ): Promise<ProcessingResult> {
   // Prepare comprehensive data for LLM analysis
   let sampleData: DataRow[] = [];
@@ -257,44 +323,26 @@ Important:
   `;
 
   try {
-    // Prepare the messages for vLLM API (OpenAI compatible format)
-    const messages = [
-      {
-        role: "system",
-        content: systemPrompts[agentType as keyof typeof systemPrompts] || systemPrompts['statistical-analyst']
-      },
-      {
-        role: "user", 
-        content: userPrompt
-      }
-    ];
-
-    // Call vLLM endpoint
-    const response = await fetch(`${VLLM_ENDPOINT_URL}/v1/chat/completions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: VLLM_MODEL_NAME,
-        messages: messages,
-        max_tokens: 2000,
-        temperature: 0.1,
-        stream: false
-      })
+    // Initialize Anthropic client with user's API key
+    const anthropicClient = new Anthropic({
+      apiKey: apiKey || process.env.ANTHROPIC_API_KEY
     });
 
-    if (!response.ok) {
-      throw new Error(`vLLM API error: ${response.status} ${response.statusText}`);
-    }
+    // Prepare the message for Claude
+    const response = await anthropicClient.messages.create({
+      model: 'claude-opus-4-20250514',
+      max_tokens: 4000,
+      temperature: 0.1,
+      system: systemPrompts[agentType as keyof typeof systemPrompts] || systemPrompts['statistical-analyst'],
+      messages: [
+        {
+          role: 'user',
+          content: userPrompt
+        }
+      ]
+    });
 
-    const result = await response.json();
-    
-    if (!result.choices || !result.choices[0] || !result.choices[0].message) {
-      throw new Error('Invalid response format from vLLM');
-    }
-
-    const responseText = result.choices[0].message.content;
+    const responseText = response.content[0].type === 'text' ? response.content[0].text : '';
     
     // For conversational responses, we'll create a structured analysis object
     // but keep the main response as the conversational text
@@ -303,8 +351,8 @@ Important:
       insights: extractInsights(responseText),
       agentType,
       conversational: true,
-      provider: 'vLLM',
-      model: VLLM_MODEL_NAME
+      provider: 'claude',
+      model: 'claude-opus-4-20250514'
     };
 
     // Try to extract any structured data from the response
@@ -324,7 +372,7 @@ Important:
     };
 
   } catch (error) {
-    console.error('vLLM API error:', error);
+    console.error('Claude API error:', error);
     throw error;
   }
 }
@@ -372,7 +420,9 @@ async function processWithVLLM(
   userMessage?: string, 
   hasData?: boolean,
   chatHistory?: Array<{id: string, type: string, content: string, timestamp: Date}>,
-  columns?: string[]
+  columns?: string[],
+  endpointUrl?: string,
+  modelName?: string
 ): Promise<ProcessingResult> {
   // Prepare comprehensive data for LLM analysis
   let sampleData: DataRow[] = [];
@@ -561,14 +611,14 @@ Important:
       }
     ];
 
-    // Call vLLM endpoint
-    const response = await fetch(`${VLLM_ENDPOINT_URL}/v1/chat/completions`, {
+    // Call vLLM endpoint using provided parameters
+    const response = await fetch(`${endpointUrl || VLLM_ENDPOINT_URL}/v1/chat/completions`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: VLLM_MODEL_NAME,
+        model: modelName || VLLM_MODEL_NAME,
         messages: messages,
         max_tokens: 2000,
         temperature: 0.1,
@@ -596,7 +646,7 @@ Important:
       agentType,
       conversational: true,
       provider: 'vLLM',
-      model: VLLM_MODEL_NAME
+      model: modelName || VLLM_MODEL_NAME
     };
 
     // Try to extract any structured data from the response

@@ -6,20 +6,16 @@ DataLab now uses **Anthropic's Claude** instead of OpenAI for real LLM-powered d
 
 ### 🚀 **Key Benefits of Claude Integration:**
 
-1. **Cost Efficiency**: Claude-3-Haiku is significantly more cost-effective
-   - ~$0.0002-0.002 per agent execution (vs $0.001-0.01 with GPT-4)
-   - Up to 80% cost savings on LLM processing
-
-2. **Speed**: Faster response times with Haiku model
+1. **Speed**: Faster response times
    - Optimized for quick analysis tasks
    - Lower latency for better user experience
 
-3. **Quality**: Excellent performance on data analysis tasks
+2. **Quality**: Excellent performance on data analysis tasks
    - Strong reasoning capabilities
    - Reliable JSON output parsing
    - Context-aware recommendations
 
-4. **Safety**: Built-in safety features and responsible AI practices
+3. **Safety**: Built-in safety features and responsible AI practices
 
 ## 🔧 **How to Use Claude Integration:**
 
@@ -59,7 +55,6 @@ ANTHROPIC_API_KEY=your_api_key_here
 
 ## 🎯 **Technical Highlights:**
 
-✅ **Model**: claude-3-haiku-20240307 (fast, cost-effective)  
 ✅ **Security**: API keys stored locally, never committed  
 ✅ **Reliability**: Automatic fallback to local processing  
 ✅ **Type Safety**: Full TypeScript integration  

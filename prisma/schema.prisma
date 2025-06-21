@@ -121,8 +121,11 @@ model UserProfile {
   
   // API and LLM preferences
   preferredLLMProvider LLMProvider @default(ANTHROPIC)
+  preferredModelName   String?
   anthropicApiKey      String?
   openaiApiKey         String?
+  vllmEndpointUrl      String?
+  vllmModelName        String?
   
   // Notification preferences
   emailNotifications   Boolean @default(true)
@@ -276,6 +279,7 @@ enum Theme {
 enum LLMProvider {
   ANTHROPIC
   OPENAI
+  VLLM
   LOCAL
 }
 
